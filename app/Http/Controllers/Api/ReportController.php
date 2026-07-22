@@ -8,9 +8,12 @@ use App\Models\Lesson;
 use App\Models\Evaluation;
 use App\Models\EvaluationResult;
 use App\Models\LessonProgress;
+use App\Exports\GradesExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
@@ -20,7 +23,7 @@ class ReportController extends Controller
     public function performanceReport(Request $request)
     {
         $request->validate([
-            'period' => 'nullable|in:week,month,quarter,year',
+            'period' => 'nullable|in:week,month,quarter,year,current,last_month,last_quarter,all_time',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after:start_date'
         ]);
@@ -30,7 +33,7 @@ class ReportController extends Controller
         // Filtros de fecha
         if ($request->has('start_date') && $request->has('end_date')) {
             $query->whereBetween('created_at', [$request->start_date, $request->end_date]);
-        } elseif ($request->has('period')) {
+        } elseif ($request->has('period') && $request->period !== 'all_time') {
             $query->whereBetween('created_at', $this->getPeriodDateRange($request->period));
         }
 
@@ -50,7 +53,7 @@ class ReportController extends Controller
             'difficulty_areas' => $this->getDifficultyAreas($query)
         ];
 
-        return response()->json($stats);
+        return response()->json(['data' => $stats]);
     }
 
     /**
@@ -61,44 +64,29 @@ class ReportController extends Controller
         $request->validate([
             'evaluation_id' => 'nullable|exists:evaluations,id',
             'student_id' => 'nullable|exists:users,id',
-            'period' => 'nullable|in:week,month,quarter,year'
+            'period' => 'nullable|in:week,month,quarter,year,current,last_month,last_quarter,all_time'
         ]);
 
-        $query = EvaluationResult::with(['user', 'evaluation'])
-            ->where('status', 'completed');
-
-        // Filtros
-        if ($request->has('evaluation_id')) {
-            $query->where('evaluation_id', $request->evaluation_id);
-        }
-
-        if ($request->has('student_id')) {
-            $query->where('user_id', $request->student_id);
-        }
-
-        if ($request->has('period')) {
-            $query->whereBetween('created_at', $this->getPeriodDateRange($request->period));
-        }
-
-        // Si es docente, solo ver sus evaluaciones
-        if (Auth::user()->isTeacher()) {
-            $evaluationIds = Evaluation::where('teacher_id', Auth::id())->pluck('id');
-            $query->whereIn('evaluation_id', $evaluationIds);
-        }
+        $query = $this->buildGradesQuery($request);
 
         $results = $query->orderBy('created_at', 'desc')
             ->paginate($request->per_page ?? 20);
 
-        // Resumen estadístico
+        // Resumen estadístico (recalculado sin paginar)
+        $summaryQuery = $this->buildGradesQuery($request);
         $summary = [
-            'average' => $query->avg('score'),
-            'max' => $query->max('score'),
-            'min' => $query->min('score'),
-            'total' => $query->count()
+            'average' => $summaryQuery->avg('score'),
+            'max' => $summaryQuery->max('score'),
+            'min' => $summaryQuery->min('score'),
+            'total' => $summaryQuery->count()
         ];
 
         return response()->json([
-            'results' => $results,
+            'data' => $results->items(),
+            'meta' => [
+                'current_page' => $results->currentPage(),
+                'total' => $results->total(),
+            ],
             'summary' => $summary
         ]);
     }
@@ -111,7 +99,6 @@ class ReportController extends Controller
         $user = User::with(['studentProfile'])->findOrFail($userId);
 
         if (Auth::user()->isTeacher()) {
-            // Verificar que el estudiante pertenezca al docente
             $evaluationIds = Evaluation::where('teacher_id', Auth::id())->pluck('id');
             $hasResults = EvaluationResult::where('user_id', $userId)
                 ->whereIn('evaluation_id', $evaluationIds)
@@ -124,19 +111,16 @@ class ReportController extends Controller
             }
         }
 
-        // Progreso de lecciones
         $lessonProgress = LessonProgress::where('user_id', $userId)
             ->with('lesson')
             ->get();
 
-        // Resultados de evaluaciones
         $evaluationResults = EvaluationResult::where('user_id', $userId)
             ->with('evaluation')
             ->where('status', 'completed')
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // Estadísticas del estudiante
         $stats = [
             'total_lessons_completed' => $lessonProgress->where('status', 'completed')->count(),
             'total_lessons_in_progress' => $lessonProgress->where('status', 'in_progress')->count(),
@@ -148,7 +132,6 @@ class ReportController extends Controller
             'badges' => $user->studentProfile->badges ?? []
         ];
 
-        // Análisis de fortalezas y debilidades
         $strengths = $this->analyzeStrengths($evaluationResults);
 
         return response()->json([
@@ -165,12 +148,24 @@ class ReportController extends Controller
      */
     public function exportPDF(Request $request)
     {
-        // Aquí se implementaría la generación de PDF con DomPDF
-        // Por ahora retornamos un mensaje
-        return response()->json([
-            'message' => 'Función de exportación PDF en desarrollo',
-            'data' => $request->all()
+        $rows = $this->buildGradesQuery($request)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $summary = [
+            'average' => $rows->avg('score'),
+            'max' => $rows->max('score'),
+            'min' => $rows->min('score'),
+            'total' => $rows->count()
+        ];
+
+        $pdf = Pdf::loadView('reports.report-pdf', [
+            'rows' => $rows,
+            'summary' => $summary,
+            'period' => $request->period ?? 'current'
         ]);
+
+        return $pdf->download('reporte-rendimiento-' . ($request->period ?? 'current') . '.pdf');
     }
 
     /**
@@ -178,19 +173,46 @@ class ReportController extends Controller
      */
     public function exportExcel(Request $request)
     {
-        // Aquí se implementaría la generación de Excel con Maatwebsite
-        // Por ahora retornamos un mensaje
-        return response()->json([
-            'message' => 'Función de exportación Excel en desarrollo',
-            'data' => $request->all()
-        ]);
+        $rows = $this->buildGradesQuery($request)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $filename = 'reporte-rendimiento-' . ($request->period ?? 'current') . '.xlsx';
+
+        return Excel::download(new GradesExport($rows), $filename);
     }
 
     // ========== MÉTODOS PRIVADOS DE AYUDA ==========
 
     /**
-     * Calcular tasa de aprobación
+     * Construye el query base de calificaciones, aplicando los mismos filtros
+     * que gradesReport/exportPDF/exportExcel usan en común (evita duplicar lógica).
      */
+    private function buildGradesQuery(Request $request)
+    {
+        $query = EvaluationResult::with(['user', 'evaluation'])
+            ->where('status', 'completed');
+
+        if ($request->filled('evaluation_id')) {
+            $query->where('evaluation_id', $request->evaluation_id);
+        }
+
+        if ($request->filled('student_id')) {
+            $query->where('user_id', $request->student_id);
+        }
+
+        if ($request->filled('period') && $request->period !== 'all_time') {
+            $query->whereBetween('created_at', $this->getPeriodDateRange($request->period));
+        }
+
+        if (Auth::user()->isTeacher()) {
+            $evaluationIds = Evaluation::where('teacher_id', Auth::id())->pluck('id');
+            $query->whereIn('evaluation_id', $evaluationIds);
+        }
+
+        return $query;
+    }
+
     private function calculatePassingRate($query)
     {
         $total = $query->count();
@@ -200,9 +222,6 @@ class ReportController extends Controller
         return round(($passing / $total) * 100, 2);
     }
 
-    /**
-     * Obtener los mejores estudiantes
-     */
     private function getTopPerformers($query)
     {
         return $query->select('user_id', DB::raw('AVG(score) as avg_score'))
@@ -213,12 +232,8 @@ class ReportController extends Controller
             ->get();
     }
 
-    /**
-     * Obtener áreas de dificultad
-     */
     private function getDifficultyAreas($query)
     {
-        // Agrupar por tipo de evaluación
         return EvaluationResult::whereIn('id', $query->pluck('id'))
             ->join('evaluations', 'evaluation_results.evaluation_id', '=', 'evaluations.id')
             ->select('evaluations.type', DB::raw('AVG(score) as avg_score'), DB::raw('COUNT(*) as total'))
@@ -226,30 +241,27 @@ class ReportController extends Controller
             ->get();
     }
 
-    /**
-     * Obtener rango de fechas según período
-     */
     private function getPeriodDateRange($period)
     {
         $now = now();
-        
+
         switch ($period) {
             case 'week':
                 return [$now->copy()->startOfWeek(), $now->copy()->endOfWeek()];
             case 'month':
-                return [$now->copy()->startOfMonth(), $now->copy()->endOfMonth()];
+            case 'last_month':
+                return [$now->copy()->subMonth()->startOfMonth(), $now->copy()->subMonth()->endOfMonth()];
             case 'quarter':
-                return [$now->copy()->startOfQuarter(), $now->copy()->endOfQuarter()];
+            case 'last_quarter':
+                return [$now->copy()->subQuarter()->startOfQuarter(), $now->copy()->subQuarter()->endOfQuarter()];
             case 'year':
                 return [$now->copy()->startOfYear(), $now->copy()->endOfYear()];
+            case 'current':
             default:
                 return [$now->copy()->subDays(30), $now];
         }
     }
 
-    /**
-     * Analizar fortalezas y debilidades del estudiante
-     */
     private function analyzeStrengths($evaluationResults)
     {
         if ($evaluationResults->isEmpty()) {
@@ -260,9 +272,8 @@ class ReportController extends Controller
             ];
         }
 
-        // Agrupar por tipo de evaluación
         $byType = $evaluationResults->groupBy('evaluation.type');
-        
+
         $analysis = [];
         foreach ($byType as $type => $results) {
             $avgScore = $results->avg('score');
@@ -285,7 +296,6 @@ class ReportController extends Controller
             }
         }
 
-        // Generar recomendaciones
         if (!empty($weaknesses)) {
             $recommendations[] = 'Fortalecer áreas débiles: ' . implode(', ', $weaknesses);
         }

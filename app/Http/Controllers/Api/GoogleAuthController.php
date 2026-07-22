@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Http\Request;
+use Google\Client as GoogleClient;
 
 class GoogleAuthController extends Controller
 {
@@ -31,7 +32,7 @@ class GoogleAuthController extends Controller
     {
         try {
             $googleUser = Socialite::driver('google')->stateless()->user();
-            
+
             // Buscar usuario por google_id o email
             $user = User::where('google_id', $googleUser->id)
                 ->orWhere('email', $googleUser->email)
@@ -56,7 +57,6 @@ class GoogleAuthController extends Controller
 
                 // Actualizar último login
                 $user->update(['last_login' => now()]);
-
             } else {
                 // Crear nuevo usuario con Google
                 $studentRole = Role::where('name', Role::STUDENT)->first();
@@ -92,7 +92,6 @@ class GoogleAuthController extends Controller
                 'access_token' => $token,
                 'token_type' => 'Bearer'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al autenticar con Google',
@@ -101,9 +100,6 @@ class GoogleAuthController extends Controller
         }
     }
 
-    /**
-     * Login con token de Google desde el frontend
-     */
     public function loginWithGoogleToken(Request $request)
     {
         $request->validate([
@@ -111,48 +107,40 @@ class GoogleAuthController extends Controller
         ]);
 
         try {
-            $googleUser = Socialite::driver('google')
-                ->stateless()
-                ->userFromToken($request->access_token);
-
-            if (!$googleUser) {
-                return response()->json([
-                    'message' => 'Token de Google inválido'
-                ], 401);
+            $client = new GoogleClient(['client_id' => env('GOOGLE_CLIENT_ID')]);
+            $payload = $client->verifyIdToken($request->access_token);
+            if (!$payload) {
+                return response()->json(['message' => 'Token de Google inválido'], 401);
             }
 
-            // Buscar o crear usuario (misma lógica que el callback)
-            $user = User::where('google_id', $googleUser->id)
-                ->orWhere('email', $googleUser->email)
+            $googleId = $payload['sub'];
+            $email = $payload['email'];
+            $name = $payload['name'];
+            $avatar = $payload['picture'] ?? null;
+
+            $user = User::where('google_id', $googleId)
+                ->orWhere('email', $email)
                 ->first();
 
             if ($user) {
                 if (!$user->google_id) {
                     $user->update([
-                        'google_id' => $googleUser->id,
-                        'google_token' => $googleUser->token,
+                        'google_id' => $googleId,
                         'provider' => 'google'
                     ]);
                 }
-
                 if (!$user->is_active) {
-                    return response()->json([
-                        'message' => 'Usuario inactivo'
-                    ], 403);
+                    return response()->json(['message' => 'Usuario inactivo'], 403);
                 }
-
                 $user->update(['last_login' => now()]);
-
             } else {
                 $studentRole = Role::where('name', Role::STUDENT)->first();
-
                 $user = User::create([
                     'id' => Str::uuid(),
-                    'email' => $googleUser->email,
-                    'full_name' => $googleUser->name,
-                    'profile_image' => $googleUser->avatar,
-                    'google_id' => $googleUser->id,
-                    'google_token' => $googleUser->token,
+                    'email' => $email,
+                    'full_name' => $name,
+                    'profile_image' => $avatar,
+                    'google_id' => $googleId,
                     'provider' => 'google',
                     'role_id' => $studentRole->id,
                     'is_active' => true,
@@ -174,13 +162,12 @@ class GoogleAuthController extends Controller
                 'user' => $user->load('role'),
                 'access_token' => $token,
                 'token_type' => 'Bearer'
-            ]); 
-
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al autenticar con Google',
                 'error' => $e->getMessage()
-            ], 500);
+            ], 401);
         }
     }
 }

@@ -110,8 +110,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/{id}/progress', [ProgressController::class, 'getLessonProgress']);
         Route::post('/{id}/progress', [ProgressController::class, 'updateLessonProgress']);
         
-        // Rutas solo para docentes y admin
-        Route::middleware(['role:teacher,admin'])->group(function () {
+        // Rutas solo para docentes (el admin no crea/gestiona contenido de lecciones)
+        Route::middleware(['role:teacher'])->group(function () {
             Route::post('/', [LessonController::class, 'store']);
             Route::put('/{id}', [LessonController::class, 'update']);
             Route::delete('/{id}', [LessonController::class, 'destroy']);
@@ -136,14 +136,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/{evaluationId}/submit', [EvaluationController::class, 'submit']);
         Route::get('/{evaluationId}/results', [EvaluationController::class, 'getResults']);
         
-        // Rutas para docentes y admin (resultados de estudiantes específicos)
-        Route::middleware(['role:teacher,admin'])->group(function () {
+        // Rutas para docentes (resultados de estudiantes específicos)
+        Route::middleware(['role:teacher'])->group(function () {
             Route::get('/{evaluationId}/result/{userId}', [EvaluationController::class, 'getStudentResult']);
             Route::get('/{id}/stats', [EvaluationController::class, 'getStats']);
         });
         
-        // Rutas solo para docentes y admin (gestión)
-        Route::middleware(['role:teacher,admin'])->group(function () {
+        // Rutas solo para docentes (gestión) — el admin no crea/gestiona evaluaciones
+        Route::middleware(['role:teacher'])->group(function () {
             Route::post('/', [EvaluationController::class, 'store']);
             Route::put('/{id}', [EvaluationController::class, 'update']);
             Route::delete('/{id}', [EvaluationController::class, 'destroy']);

@@ -1,5 +1,32 @@
 # MathFlow — Deployment Guide
 
+## Despliegue en Oracle Cloud Free Tier (gratis para siempre)
+
+Oracle Cloud ofrece una VM ARM con 4 vCPU y 24 GB de RAM en su tier **Always Free** (no caduca). Este proyecto incluye:
+
+- `deploy/setup_oracle.sh` — instalación automatizada (PHP 8.3, Nginx, MySQL, Composer, migraciones, seeders, workers).
+- `deploy/nginx.conf` — configuración de Nginx lista.
+- `deploy/supervisor.conf` — queue worker.
+
+### Pasos
+
+1. **Crear la cuenta** en https://signup.cloud.oracle.com. Elige que NO active "Pay As You Go" y quédate en Always Free. (Verificación con tarjeta de débito BCP funciona; solo hacen una pre-autorización temporal que reembolsan.)
+2. **Crear una VM** (Compute → Instances → Create): imagen Ubuntu 22.04/24.04 o Oracle Linux 8/9, shape **VM.Standard.A1.Flex** (ARM), genera una clave SSH y descárgala.
+3. **Abrir puertos** en Oracle: Networking → Virtual Cloud Networks → tu VCN → Security List → Add Ingress Rule: puertos `80` y `443` con origen `0.0.0.0/0`.
+4. **Conectarte por SSH** desde Windows PowerShell:
+   ```powershell
+   ssh -i "C:\Users\...\clave.key" ubuntu@<IP_PUBLICA>
+   ```
+   (en Oracle Linux el usuario es `opc`, no `ubuntu`).
+5. **Editar** las variables de configuración al inicio de `setup_oracle.sh` (dominio, contraseñas de BD) y ejecutar:
+   ```bash
+   sudo bash setup_oracle.sh
+   ```
+6. **Configurar lo manual** que indica el script al final (TLS con certbot si tienes dominio, y valores reales en `.env`).
+
+### Nota sobre cargos
+Mientras uses solo los recursos Always Free (1 VM ARM) y configures **Budget = $0** en tu cuenta, no hay cargos. No actives "Pay As You Go".
+
 ## Requisitos del servidor
 
 - PHP 8.2+ (con extensiones: mbstring, xml, ctype, json, bcmath, pdo, tokenizer)

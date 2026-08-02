@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
+use App\Services\PushNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -17,18 +18,16 @@ class NotificationController extends Controller
     {
         $query = Notification::where('user_id', Auth::id());
 
-        // Filtrar por leído/no leído
         if ($request->has('unread') && $request->unread) {
             $query->where('is_read', false);
         }
 
-        // Filtrar por tipo
         if ($request->has('type')) {
             $query->where('type', $request->type);
         }
 
         $notifications = $query->orderBy('created_at', 'desc')
-            ->paginate($request->per_page ?? 20);
+            ->paginate(min((int) ($request->per_page ?? 20), 50));
 
         return response()->json($notifications);
     }
@@ -59,7 +58,7 @@ class NotificationController extends Controller
         $notification->update(['is_read' => true]);
 
         return response()->json([
-            'message' => 'Notificación marcada como leída'
+            'message' => __('notification_marked_as_read')
         ]);
     }
 
@@ -73,7 +72,7 @@ class NotificationController extends Controller
             ->update(['is_read' => true]);
 
         return response()->json([
-            'message' => 'Todas las notificaciones marcadas como leídas'
+            'message' => __('notification_all_marked_as_read')
         ]);
     }
 
@@ -89,7 +88,7 @@ class NotificationController extends Controller
         $notification->delete();
 
         return response()->json([
-            'message' => 'Notificación eliminada'
+            'message' => __('notification_deleted')
         ]);
     }
 
@@ -103,12 +102,12 @@ class NotificationController extends Controller
             ->delete();
 
         return response()->json([
-            'message' => 'Notificaciones leídas eliminadas'
+            'message' => __('notification_read_deleted')
         ]);
     }
 
     /**
-     * Crear notificación (método auxiliar estático)
+     * Crear notificación (in-app)
      */
     public static function createNotification($userId, $title, $message, $type = 'info', $link = null)
     {
@@ -124,7 +123,38 @@ class NotificationController extends Controller
     }
 
     /**
-     * Crear notificación para múltiples usuarios
+     * Crear notificación + enviar push (in-app + push)
+     */
+    public static function createAndPush($userId, $title, $message, $type = 'info', $link = null)
+    {
+        // Crear in-app
+        $notification = Notification::create([
+            'id' => Str::uuid(),
+            'user_id' => $userId,
+            'title' => $title,
+            'message' => $message,
+            'type' => $type,
+            'link' => $link,
+            'is_read' => false
+        ]);
+
+        // Enviar push (fire and forget)
+        try {
+            $pushService = app(PushNotificationService::class);
+            $pushService->sendToUser($userId, $title, $message, [
+                'notification_id' => $notification->id,
+                'type' => $type,
+                'link' => $link ?? '',
+            ]);
+        } catch (\Exception $e) {
+            report($e);
+        }
+
+        return $notification;
+    }
+
+    /**
+     * Crear notificación para múltiples usuarios (in-app)
      */
     public static function createBulkNotifications($userIds, $title, $message, $type = 'info', $link = null)
     {
@@ -144,5 +174,23 @@ class NotificationController extends Controller
         }
 
         return Notification::insert($notifications);
+    }
+
+    /**
+     * Crear notificaciones bulk + push (in-app + push)
+     */
+    public static function createBulkAndPush(array $userIds, $title, $message, $type = 'info', $link = null)
+    {
+        self::createBulkNotifications($userIds, $title, $message, $type, $link);
+
+        try {
+            $pushService = app(PushNotificationService::class);
+            $pushService->sendToUsers($userIds, $title, $message, [
+                'type' => $type,
+                'link' => $link ?? '',
+            ]);
+        } catch (\Exception $e) {
+            report($e);
+        }
     }
 }

@@ -11,9 +11,10 @@ use App\Models\StudentProfile;
 use App\Models\TeacherProfile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Password;
 use Laravel\Socialite\Facades\Socialite;
 
 class AuthController extends Controller
@@ -25,24 +26,21 @@ class AuthController extends Controller
     {
         $validated = $request->validated();
 
-        // Verificar si el email ya existe
         if (User::where('email', $validated['email'])->exists()) {
             return response()->json([
-                'message' => 'El correo electrónico ya está registrado'
+                'message' => __('email_already_registered')
             ], 422);
         }
 
-        // Obtener rol
         $roleName = $validated['role'] ?? Role::STUDENT;
         $role = Role::where('name', $roleName)->first();
 
         if (!$role) {
             return response()->json([
-                'message' => 'Rol no válido'
+                'message' => __('invalid_role')
             ], 422);
         }
 
-        // Crear usuario
         $user = User::create([
             'id' => Str::uuid(),
             'email' => $validated['email'],
@@ -55,7 +53,6 @@ class AuthController extends Controller
             'provider' => 'email'
         ]);
 
-        // Crear perfil según el rol
         if ($roleName === Role::STUDENT) {
             StudentProfile::create([
                 'id' => Str::uuid(),
@@ -71,11 +68,11 @@ class AuthController extends Controller
             ]);
         }
 
-        // Generar token
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $platform = $this->resolvePlatform($request);
+        $token = $user->createToken('auth_token', [$platform])->plainTextToken;
 
         return response()->json([
-            'message' => 'Usuario registrado exitosamente',
+            'message' => __('register_success'),
             'user' => $user->load('role'),
             'access_token' => $token,
             'token_type' => 'Bearer'
@@ -89,37 +86,33 @@ class AuthController extends Controller
     {
         $validated = $request->validated();
 
-        // Buscar usuario por email
         $user = User::where('email', $validated['email'])->first();
 
         if (!$user) {
             return response()->json([
-                'message' => 'Credenciales inválidas'
+                'message' => __('invalid_credentials')
             ], 401);
         }
 
-        // Verificar contraseña
         if (!Hash::check($validated['password'], $user->password)) {
             return response()->json([
-                'message' => 'Credenciales inválidas'
+                'message' => __('invalid_credentials')
             ], 401);
         }
 
-        // Verificar si el usuario está activo
         if (!$user->is_active) {
             return response()->json([
-                'message' => 'Usuario inactivo'
+                'message' => __('user_inactive')
             ], 403);
         }
 
-        // Actualizar último login
         $user->update(['last_login' => now()]);
 
-        // Generar token
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $platform = $this->resolvePlatform($request);
+        $token = $user->createToken('auth_token', [$platform])->plainTextToken;
 
         return response()->json([
-            'message' => 'Login exitoso',
+            'message' => __('login_success'),
             'user' => $user->load('role'),
             'access_token' => $token,
             'token_type' => 'Bearer'
@@ -156,13 +149,13 @@ class AuthController extends Controller
         $user->update($validated);
 
         return response()->json([
-            'message' => 'Perfil actualizado exitosamente',
+            'message' => __('profile_updated'),
             'user' => $user
         ]);
     }
 
     /**
-     * Cambiar contraseña
+     * Cambiar contraseña — invalida TODOS los tokens excepto el actual
      */
     public function changePassword(Request $request)
     {
@@ -173,16 +166,15 @@ class AuthController extends Controller
 
         $user = Auth::user();
 
-        // Verificar si el usuario se registró con Google
         if ($user->isGoogleUser()) {
             return response()->json([
-                'message' => 'Los usuarios de Google no pueden cambiar su contraseña aquí. Usa "Olvidé mi contraseña" si es necesario.'
+                'message' => __('google_user_cannot_change_password')
             ], 400);
         }
 
         if (!Hash::check($validated['current_password'], $user->password)) {
             return response()->json([
-                'message' => 'Contraseña actual incorrecta'
+                'message' => __('current_password_incorrect')
             ], 400);
         }
 
@@ -190,8 +182,112 @@ class AuthController extends Controller
             'password' => Hash::make($validated['new_password'])
         ]);
 
+        $currentTokenId = $request->user()->currentAccessToken()->id;
+        $user->tokens()->where('id', '!=', $currentTokenId)->delete();
+
         return response()->json([
-            'message' => 'Contraseña actualizada exitosamente'
+            'message' => __('password_changed_sessions_revoked')
+        ]);
+    }
+
+    /**
+     * Cerrar sesión — elimina el token actual
+     */
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json([
+            'message' => __('logout_success')
+        ]);
+    }
+
+    /**
+     * Cerrar TODAS las sesiones de una plataforma específica
+     */
+    public function logoutPlatform(Request $request)
+    {
+        $validated = $request->validate([
+            'platform' => 'required|in:web,android,ios'
+        ]);
+
+        $platform = $validated['platform'];
+        $deletedCount = $request->user()->tokens()
+            ->where('abilities', 'like', '%"' . $platform . '"%')
+            ->delete();
+
+        return response()->json([
+            'message' => __('platform_sessions_closed', ['platform' => $platform, 'count' => $deletedCount])
+        ]);
+    }
+
+    /**
+     * Cerrar TODAS las sesiones excepto la actual
+     */
+    public function logoutAll(Request $request)
+    {
+        $currentTokenId = $request->user()->currentAccessToken()->id;
+        $deletedCount = $request->user()->tokens()
+            ->where('id', '!=', $currentTokenId)
+            ->delete();
+
+        return response()->json([
+            'message' => __('all_other_sessions_closed', ['count' => $deletedCount])
+        ]);
+    }
+
+    /**
+     * Listar sesiones activas (dispositivos)
+     */
+    public function devices(Request $request)
+    {
+        $tokens = $request->user()->tokens()->get();
+        $currentTokenId = $request->user()->currentAccessToken()->id;
+
+        $devices = $tokens->map(function ($token) use ($currentTokenId) {
+            $abilities = $token->abilities;
+            $platform = 'unknown';
+            foreach (['web', 'android', 'ios'] as $p) {
+                if (in_array($p, $abilities)) {
+                    $platform = $p;
+                    break;
+                }
+            }
+
+            return [
+                'id' => $token->id,
+                'platform' => $platform,
+                'name' => $token->name,
+                'is_current' => $token->id === $currentTokenId,
+                'created_at' => $token->created_at,
+                'last_used_at' => $token->last_used_at,
+                'expires_at' => $token->expires_at,
+            ];
+        });
+
+        return response()->json([
+            'devices' => $devices
+        ]);
+    }
+
+    /**
+     * Refrescar token (renovar expiración)
+     */
+    public function refreshToken(Request $request)
+    {
+        $user = $request->user();
+        $currentToken = $user->currentAccessToken();
+
+        $newToken = $user->createToken(
+            $currentToken->name,
+            $currentToken->abilities
+        )->plainTextToken;
+
+        $currentToken->delete();
+
+        return response()->json([
+            'access_token' => $newToken,
+            'token_type' => 'Bearer'
         ]);
     }
 
@@ -211,14 +307,13 @@ class AuthController extends Controller
                 ->stateless()
                 ->userFromToken($request->access_token);
 
-            // Verificar si el Google ID ya está vinculado a otra cuenta
             $existingUser = User::where('google_id', $googleUser->id)
                 ->where('id', '!=', $user->id)
                 ->first();
 
             if ($existingUser) {
                 return response()->json([
-                    'message' => 'Esta cuenta de Google ya está vinculada a otro usuario'
+                    'message' => __('google_account_linked_to_other')
                 ], 409);
             }
 
@@ -233,9 +328,9 @@ class AuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            report($e);
             return response()->json([
-                'message' => 'Error al vincular cuenta de Google',
-                'error' => $e->getMessage()
+                'message' => 'Error al vincular cuenta de Google'
             ], 500);
         }
     }
@@ -247,10 +342,10 @@ class AuthController extends Controller
     {
         $user = Auth::user();
 
-        // Verificar si el usuario tiene contraseña establecida
-        if (!$user->password) {
+        // Only allow disconnect if user has verified email (set their own password)
+        if (!$user->email_verified_at) {
             return response()->json([
-                'message' => 'No puedes desvincular tu cuenta de Google sin tener una contraseña establecida. Usa "Olvidé mi contraseña" para crear una.'
+                'message' => 'Debes crear una contraseña antes de desvincular Google. Usa "Cambiar contraseña".'
             ], 400);
         }
 
@@ -266,28 +361,70 @@ class AuthController extends Controller
     }
 
     /**
-     * Cerrar sesión
+     * Enviar código de verificación de email
      */
-    public function logout(Request $request)
+    public function sendVerificationEmail(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user();
 
-        return response()->json([
-            'message' => 'Sesión cerrada exitosamente'
-        ]);
+        if ($user->email_verified_at) {
+            return response()->json(['message' => 'Tu correo ya está verificado']);
+        }
+
+        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        Cache::put('email_verify_' . $user->id, $code, 600);
+
+        try {
+            Mail::raw("Tu código de verificación es: {$code}\n\nEste código expira en 10 minutos.", function ($message) use ($user) {
+                $message->to($user->email)
+                    ->subject('Verifica tu correo - MathFlow');
+            });
+        } catch (\Exception $e) {
+            report($e);
+        }
+
+        return response()->json(['message' => 'Código de verificación enviado']);
     }
 
     /**
-     * Refrescar token
+     * Verificar email con código
      */
-    public function refreshToken(Request $request)
+    public function verifyEmail(Request $request)
     {
-        $request->user()->tokens()->delete();
-        $token = $request->user()->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'access_token' => $token,
-            'token_type' => 'Bearer'
+        $validated = $request->validate([
+            'code' => 'required|string|size:6'
         ]);
+
+        $user = $request->user();
+        $storedCode = Cache::get('email_verify_' . $user->id);
+
+        if (!$storedCode || $storedCode !== $validated['code']) {
+            return response()->json(['message' => 'Código inválido o expirado'], 422);
+        }
+
+        $user->update(['email_verified_at' => now()]);
+        Cache::forget('email_verify_' . $user->id);
+
+        return response()->json(['message' => 'Correo verificado exitosamente']);
+    }
+
+    // ========== PRIVATE ==========
+
+    private function resolvePlatform(Request $request): string
+    {
+        $header = $request->header('X-Platform');
+        if ($header && in_array(strtolower($header), ['web', 'android', 'ios'])) {
+            return strtolower($header);
+        }
+
+        $ua = strtolower($request->userAgent() ?? '');
+        if (str_contains($ua, 'android')) {
+            return 'android';
+        }
+        if (str_contains($ua, 'iphone') || str_contains($ua, 'ipad') || str_contains($ua, 'ipod')) {
+            return 'ios';
+        }
+
+        return 'web';
     }
 }

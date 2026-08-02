@@ -15,17 +15,17 @@ class LoginRequest extends FormRequest
     {
         return [
             'email' => 'required|email',
-            'password' => 'required|string|min:6'
+            'password' => 'required|string|min:8'
         ];
     }
 
     public function messages(): array
     {
         return [
-            'email.required' => 'El correo electrónico es obligatorio',
-            'email.email' => 'El correo electrónico debe ser válido',
-            'password.required' => 'La contraseña es obligatoria',
-            'password.min' => 'La contraseña debe tener al menos 6 caracteres'
+            'email.required' => __('validation_email_required'),
+            'email.email' => __('validation_email_invalid'),
+            'password.required' => __('validation_password_required'),
+            'password.min' => __('validation_password_min'),
         ];
     }
 }

@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Role;
 use App\Models\StudentProfile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Http\Request;
@@ -14,32 +15,23 @@ use Google\Client as GoogleClient;
 
 class GoogleAuthController extends Controller
 {
-    /**
-     * Redirige al usuario a Google para autenticación
-     */
     public function redirectToGoogle()
     {
         return Socialite::driver('google')
-            ->stateless()
             ->with(['prompt' => 'select_account'])
             ->redirect();
     }
 
-    /**
-     * Maneja el callback de Google
-     */
     public function handleGoogleCallback()
     {
         try {
-            $googleUser = Socialite::driver('google')->stateless()->user();
+            $googleUser = Socialite::driver('google')->user();
 
-            // Buscar usuario por google_id o email
             $user = User::where('google_id', $googleUser->id)
                 ->orWhere('email', $googleUser->email)
                 ->first();
 
             if ($user) {
-                // Actualizar google_id si no existe
                 if (!$user->google_id) {
                     $user->update([
                         'google_id' => $googleUser->id,
@@ -48,17 +40,12 @@ class GoogleAuthController extends Controller
                     ]);
                 }
 
-                // Si el usuario existe pero está inactivo
                 if (!$user->is_active) {
-                    return response()->json([
-                        'message' => 'Usuario inactivo. Contacta al administrador.'
-                    ], 403);
+                    return redirect(config('app.url') . '/login?error=inactive');
                 }
 
-                // Actualizar último login
                 $user->update(['last_login' => now()]);
             } else {
-                // Crear nuevo usuario con Google
                 $studentRole = Role::where('name', Role::STUDENT)->first();
 
                 $user = User::create([
@@ -75,7 +62,6 @@ class GoogleAuthController extends Controller
                     'password' => Hash::make(Str::random(24))
                 ]);
 
-                // Crear perfil de estudiante
                 StudentProfile::create([
                     'id' => Str::uuid(),
                     'user_id' => $user->id,
@@ -83,23 +69,22 @@ class GoogleAuthController extends Controller
                 ]);
             }
 
-            // Generar token de acceso
-            $token = $user->createToken('auth_token')->plainTextToken;
+            $token = $user->createToken('auth_token', ['web'])->plainTextToken;
 
-            return response()->json([
-                'message' => 'Autenticación con Google exitosa',
-                'user' => $user->load('role'),
-                'access_token' => $token,
-                'token_type' => 'Bearer'
-            ]);
+            // Use a short-lived auth code instead of the raw token in URL
+            $code = Str::random(32);
+            Cache::put('google_auth_code:' . $code, $token, now()->addMinutes(5));
+
+            return redirect(config('app.url') . '/login?auth_code=' . $code);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Error al autenticar con Google',
-                'error' => $e->getMessage()
-            ], 500);
+            report($e);
+            return redirect(config('app.url') . '/login?error=auth_failed');
         }
     }
 
+    /**
+     * Login con Google ID token — para app móvil
+     */
     public function loginWithGoogleToken(Request $request)
     {
         $request->validate([
@@ -107,10 +92,10 @@ class GoogleAuthController extends Controller
         ]);
 
         try {
-            $client = new GoogleClient(['client_id' => env('GOOGLE_CLIENT_ID')]);
+            $client = new GoogleClient(['client_id' => config('services.google.client_id')]);
             $payload = $client->verifyIdToken($request->access_token);
             if (!$payload) {
-                return response()->json(['message' => 'Token de Google inválido'], 401);
+                return response()->json(['message' => __('google_invalid_token')], 401);
             }
 
             $googleId = $payload['sub'];
@@ -130,7 +115,7 @@ class GoogleAuthController extends Controller
                     ]);
                 }
                 if (!$user->is_active) {
-                    return response()->json(['message' => 'Usuario inactivo'], 403);
+                    return response()->json(['message' => __('google_user_inactive_contact_admin')], 403);
                 }
                 $user->update(['last_login' => now()]);
             } else {
@@ -155,19 +140,59 @@ class GoogleAuthController extends Controller
                 ]);
             }
 
-            $token = $user->createToken('auth_token')->plainTextToken;
+            // Detectar plataforma desde header
+            $platform = $this->resolvePlatform($request);
+            $token = $user->createToken('auth_token', [$platform])->plainTextToken;
 
             return response()->json([
-                'message' => 'Autenticación con Google exitosa',
+                'message' => __('google_auth_success'),
                 'user' => $user->load('role'),
                 'access_token' => $token,
                 'token_type' => 'Bearer'
             ]);
         } catch (\Exception $e) {
+            report($e);
             return response()->json([
-                'message' => 'Error al autenticar con Google',
-                'error' => $e->getMessage()
-            ], 401);
+                'message' => __('google_auth_error')
+            ], 500);
         }
+    }
+
+    private function resolvePlatform(Request $request): string
+    {
+        $header = $request->header('X-Platform');
+        if ($header && in_array(strtolower($header), ['web', 'android', 'ios'])) {
+            return strtolower($header);
+        }
+
+        $ua = strtolower($request->userAgent() ?? '');
+        if (str_contains($ua, 'android')) {
+            return 'android';
+        }
+        if (str_contains($ua, 'iphone') || str_contains($ua, 'ipad') || str_contains($ua, 'ipod')) {
+            return 'ios';
+        }
+
+        return 'web';
+    }
+
+    /**
+     * Exchange a short-lived auth code for the actual token (web callback flow)
+     */
+    public function exchangeCode(Request $request)
+    {
+        $request->validate(['code' => 'required|string']);
+
+        $cacheKey = 'google_auth_code:' . $request->code;
+        $token = Cache::pull($cacheKey);
+
+        if (!$token) {
+            return response()->json(['message' => __('code_invalid_or_expired')], 401);
+        }
+
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'Bearer'
+        ]);
     }
 }

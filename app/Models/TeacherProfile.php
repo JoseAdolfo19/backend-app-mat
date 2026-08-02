@@ -34,11 +34,11 @@ class TeacherProfile extends Model
 
     public function lessons()
     {
-        return $this->hasMany(Lesson::class, 'teacher_id');
+        return $this->hasMany(Lesson::class, 'teacher_id', 'user_id');
     }
 
     public function evaluations()
     {
-        return $this->hasMany(Evaluation::class, 'teacher_id');
+        return $this->hasMany(Evaluation::class, 'teacher_id', 'user_id');
     } 
 }

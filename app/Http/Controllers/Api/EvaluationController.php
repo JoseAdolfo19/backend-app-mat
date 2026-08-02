@@ -8,11 +8,14 @@ use App\Models\Question;
 use App\Models\EvaluationResult;
 use App\Models\StudentAnswer;
 use App\Models\Lesson;
+use App\Models\Role;
 use App\Models\User;
+use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use App\Services\ActivityService;
 
 class EvaluationController extends Controller
 {
@@ -37,8 +40,11 @@ class EvaluationController extends Controller
         }
 
         if ($request->has('search') && $request->search) {
-            $query->where('title', 'LIKE', '%' . $request->search . '%')
-                  ->orWhere('description', 'LIKE', '%' . $request->search . '%');
+            $search = '%' . $request->search . '%';
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'LIKE', $search)
+                  ->orWhere('description', 'LIKE', $search);
+            });
         }
 
         if ($request->has('status') && $request->status) {
@@ -68,7 +74,7 @@ class EvaluationController extends Controller
         }
 
         $evaluations = $query->orderBy('created_at', 'desc')
-            ->paginate($request->per_page ?? 15);
+            ->paginate(min((int) ($request->per_page ?? 15), 50));
 
         // Agregar información de resultados para estudiantes
         if (Auth::user()->isStudent()) {
@@ -99,7 +105,7 @@ class EvaluationController extends Controller
             if (!$evaluation->is_published) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Esta evaluación no está disponible'
+                    'message' => __('evaluation_not_available')
                 ], 403);
             }
 
@@ -146,10 +152,10 @@ class EvaluationController extends Controller
         // Verificar que la lección exista y pertenezca al docente
         if ($request->has('lesson_id')) {
             $lesson = Lesson::find($request->lesson_id);
-            if ($lesson && $lesson->teacher_id !== Auth::id() && !Auth::user()->isAdmin()) {
+            if ($lesson && (string) $lesson->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No tienes permiso para asociar esta evaluación a la lección'
+                    'message' => __('evaluation_no_permission_associate_lesson')
                 ], 403);
             }
         }
@@ -172,9 +178,23 @@ class EvaluationController extends Controller
             'total_points' => 0
         ]);
 
+        AuditLog::create([
+            'user_id' => auth()->id(),
+            'action' => 'evaluation.store',
+            'auditable_type' => Evaluation::class,
+            'auditable_id' => $evaluation->id,
+            'new_values' => $evaluation->only('id', 'title', 'type', 'difficulty', 'teacher_id', 'lesson_id'),
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'method' => request()->method(),
+            'path' => request()->path(),
+            'platform' => request()->header('X-Platform', 'test'),
+            'status_code' => 200,
+        ]);
+
         return response()->json([
             'success' => true,
-            'message' => 'Evaluación creada exitosamente',
+            'message' => __('evaluation_created'),
             'data' => $evaluation->load('teacher')
         ], 201);
     }
@@ -186,10 +206,10 @@ class EvaluationController extends Controller
     {
         $evaluation = Evaluation::findOrFail($id);
 
-        if ($evaluation->teacher_id !== Auth::id() && !Auth::user()->isAdmin()) {
+        if ((string) $evaluation->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'No tienes permiso para editar esta evaluación'
+                'message' => __('evaluation_no_permission_edit')
             ], 403);
         }
 
@@ -207,11 +227,27 @@ class EvaluationController extends Controller
             'is_published' => 'nullable|boolean'
         ]);
 
+        $oldValues = $evaluation->only(array_keys($validated));
         $evaluation->update($validated);
+
+        AuditLog::create([
+            'user_id' => auth()->id(),
+            'action' => 'evaluation.update',
+            'auditable_type' => Evaluation::class,
+            'auditable_id' => $evaluation->id,
+            'old_values' => $oldValues,
+            'new_values' => $validated,
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'method' => request()->method(),
+            'path' => request()->path(),
+            'platform' => request()->header('X-Platform', 'test'),
+            'status_code' => 200,
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Evaluación actualizada exitosamente',
+            'message' => __('evaluation_updated'),
             'data' => $evaluation->load('teacher')
         ]);
     }
@@ -223,10 +259,10 @@ class EvaluationController extends Controller
     {
         $evaluation = Evaluation::findOrFail($id);
 
-        if ($evaluation->teacher_id !== Auth::id() && !Auth::user()->isAdmin()) {
+        if ((string) $evaluation->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'No tienes permiso para eliminar esta evaluación'
+                'message' => __('evaluation_no_permission_delete')
             ], 403);
         }
 
@@ -234,15 +270,29 @@ class EvaluationController extends Controller
         if ($evaluation->results()->count() > 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'No se puede eliminar la evaluación porque tiene resultados asociados'
+                'message' => __('evaluation_cannot_delete_has_results')
             ], 400);
         }
+
+        AuditLog::create([
+            'user_id' => auth()->id(),
+            'action' => 'evaluation.destroy',
+            'auditable_type' => Evaluation::class,
+            'auditable_id' => $evaluation->id,
+            'old_values' => $evaluation->only('id', 'title', 'teacher_id', 'lesson_id'),
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'method' => request()->method(),
+            'path' => request()->path(),
+            'platform' => request()->header('X-Platform', 'test'),
+            'status_code' => 200,
+        ]);
 
         $evaluation->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Evaluación eliminada exitosamente'
+            'message' => __('evaluation_deleted')
         ]);
     }
 
@@ -253,10 +303,10 @@ class EvaluationController extends Controller
     {
         $evaluation = Evaluation::findOrFail($id);
 
-        if ($evaluation->teacher_id !== Auth::id() && !Auth::user()->isAdmin()) {
+        if ((string) $evaluation->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'No tienes permiso para publicar esta evaluación'
+                'message' => __('evaluation_no_permission_publish')
             ], 403);
         }
 
@@ -264,7 +314,7 @@ class EvaluationController extends Controller
         if ($evaluation->questions()->count() === 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'La evaluación debe tener al menos una pregunta para ser publicada'
+                'message' => __('evaluation_must_have_questions_to_publish')
             ], 400);
         }
 
@@ -273,12 +323,27 @@ class EvaluationController extends Controller
             'published_at' => now()
         ]);
 
-        // Crear notificación para estudiantes
-        // NotificationController::createBulkNotifications(...);
+        // Notificar a estudiantes sobre evaluación publicada
+        $studentRole = Role::where('name', Role::STUDENT)->first();
+        if ($studentRole) {
+            $studentIds = User::where('role_id', $studentRole->id)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+            if (!empty($studentIds)) {
+                NotificationController::createBulkNotifications(
+                    $studentIds,
+                    __('notification_evaluation_available_title'),
+                    __('notification_evaluation_published_body', ['title' => $evaluation->title]),
+                    'info',
+                    "/evaluations/{$evaluation->id}"
+                );
+            }
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'Evaluación publicada exitosamente',
+            'message' => __('evaluation_published'),
             'data' => $evaluation
         ]);
     }
@@ -290,10 +355,10 @@ class EvaluationController extends Controller
     {
         $evaluation = Evaluation::findOrFail($id);
 
-        if ($evaluation->teacher_id !== Auth::id() && !Auth::user()->isAdmin()) {
+        if ((string) $evaluation->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'No tienes permiso para despublicar esta evaluación'
+                'message' => __('evaluation_no_permission_unpublish')
             ], 403);
         }
 
@@ -301,7 +366,7 @@ class EvaluationController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Evaluación despublicada exitosamente'
+            'message' => __('evaluation_unpublished')
         ]);
     }
 
@@ -316,7 +381,7 @@ class EvaluationController extends Controller
         if (Auth::user()->isStudent() && !$evaluation->is_published) {
             return response()->json([
                 'success' => false,
-                'message' => 'Esta evaluación no está disponible'
+                'message' => __('evaluation_not_available')
             ], 403);
         }
 
@@ -342,10 +407,10 @@ class EvaluationController extends Controller
     {
         $evaluation = Evaluation::findOrFail($evaluationId);
 
-        if ($evaluation->teacher_id !== Auth::id() && !Auth::user()->isAdmin()) {
+        if ((string) $evaluation->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'No tienes permiso para agregar preguntas'
+                'message' => __('evaluation_no_permission_add_questions')
             ], 403);
         }
 
@@ -365,7 +430,7 @@ class EvaluationController extends Controller
         if ($validated['type'] === 'multiple_choice' && empty($validated['options'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Las preguntas de opción múltiple requieren opciones'
+                'message' => __('evaluation_multiple_choice_needs_options')
             ], 400);
         }
 
@@ -386,7 +451,7 @@ class EvaluationController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Pregunta agregada exitosamente',
+            'message' => __('evaluation_question_added'),
             'data' => $question
         ], 201);
     }
@@ -399,10 +464,10 @@ class EvaluationController extends Controller
         $question = Question::findOrFail($questionId);
         $evaluation = $question->evaluation;
 
-        if ($evaluation->teacher_id !== Auth::id() && !Auth::user()->isAdmin()) {
+        if ((string) $evaluation->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'No tienes permiso para editar esta pregunta'
+                'message' => __('evaluation_no_permission_edit_question')
             ], 403);
         }
 
@@ -425,7 +490,7 @@ class EvaluationController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Pregunta actualizada exitosamente',
+            'message' => __('evaluation_question_updated'),
             'data' => $question
         ]);
     }
@@ -438,10 +503,10 @@ class EvaluationController extends Controller
         $question = Question::findOrFail($questionId);
         $evaluation = $question->evaluation;
 
-        if ($evaluation->teacher_id !== Auth::id() && !Auth::user()->isAdmin()) {
+        if ((string) $evaluation->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'No tienes permiso para eliminar esta pregunta'
+                'message' => __('evaluation_no_permission_delete_question')
             ], 403);
         }
 
@@ -452,7 +517,7 @@ class EvaluationController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Pregunta eliminada exitosamente'
+            'message' => __('evaluation_question_deleted')
         ]);
     }
 
@@ -466,7 +531,7 @@ class EvaluationController extends Controller
         if (!$evaluation->is_published) {
             return response()->json([
                 'success' => false,
-                'message' => 'Esta evaluación no está disponible'
+                'message' => __('evaluation_not_available')
             ], 403);
         }
 
@@ -474,7 +539,7 @@ class EvaluationController extends Controller
         if ($evaluation->due_date && now() > $evaluation->due_date) {
             return response()->json([
                 'success' => false,
-                'message' => 'La fecha límite para esta evaluación ha pasado'
+                'message' => __('evaluation_due_date_passed')
             ], 403);
         }
 
@@ -484,6 +549,14 @@ class EvaluationController extends Controller
             'answers.*.answer' => 'required|string',
             'time_taken' => 'nullable|integer|min:0'
         ]);
+
+        // Validación server-side de time_taken: no puede ser menor que el 20% del time_limit
+        // ni mayor que 3x el time_limit (protege contra trampas y reports absurdos)
+        if ($evaluation->time_limit && isset($validated['time_taken'])) {
+            $minTime = (int) ($evaluation->time_limit * 60 * 0.2);
+            $maxTime = (int) ($evaluation->time_limit * 60 * 3);
+            $validated['time_taken'] = max($minTime, min($maxTime, $validated['time_taken']));
+        }
 
         $user = Auth::user();
 
@@ -496,7 +569,7 @@ class EvaluationController extends Controller
         if ($attemptsCount >= $evaluation->max_attempts) {
             return response()->json([
                 'success' => false,
-                'message' => 'Has alcanzado el número máximo de intentos permitidos'
+                'message' => __('evaluation_max_attempts_reached')
             ], 403);
         }
 
@@ -514,7 +587,7 @@ class EvaluationController extends Controller
                 'id' => Str::uuid(),
                 'user_id' => $user->id,
                 'evaluation_id' => $evaluationId,
-                'max_score' => $totalPoints,
+                'max_score' => 20,
                 'total_questions' => $totalQuestions,
                 'status' => EvaluationResult::STATUS_PENDING,
                 'started_at' => now(),
@@ -549,8 +622,8 @@ class EvaluationController extends Controller
                 ]);
             }
 
-            // Calcular puntaje (escala 0-10)
-            $score = $totalPoints > 0 ? ($earnedPoints / $totalPoints) * 10 : 0;
+            // Calcular puntaje (escala 0-20)
+            $score = $totalPoints > 0 ? ($earnedPoints / $totalPoints) * 20 : 0;
 
             // Actualizar resultado
             $result->update([
@@ -563,11 +636,13 @@ class EvaluationController extends Controller
             // Actualizar perfil del estudiante
             $this->updateStudentProfile($user->id);
 
+            ActivityService::log('evaluation_completed', $evaluation);
+
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Evaluación enviada exitosamente',
+                'message' => __('evaluation_submitted'),
                 'data' => [
                     'result' => $result->load('studentAnswers.question'),
                     'score' => $result->score,
@@ -578,10 +653,10 @@ class EvaluationController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+            report($e);
             return response()->json([
                 'success' => false,
-                'message' => 'Error al enviar la evaluación',
-                'error' => $e->getMessage()
+                'message' => __('evaluation_submit_error')
             ], 500);
         }
     }
@@ -601,10 +676,10 @@ class EvaluationController extends Controller
                 ->get();
         } else {
             // Docente o admin - verificar acceso
-            if ($evaluation->teacher_id !== Auth::id() && !Auth::user()->isAdmin()) {
+            if ((string) $evaluation->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No tienes permiso para ver estos resultados'
+                    'message' => __('evaluation_no_permission_view_results')
                 ], 403);
             }
 
@@ -639,10 +714,19 @@ class EvaluationController extends Controller
      */
     public function getStudentResult($evaluationId, $userId)
     {
+        $evaluation = Evaluation::findOrFail($evaluationId);
+
+        if (Auth::user()->isTeacher() && (string) $evaluation->teacher_id !== (string) Auth::id()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('evaluation_no_permission_view_result')
+            ], 403);
+        }
+
         if (!Auth::user()->isTeacher() && !Auth::user()->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'No tienes permiso para ver este resultado'
+                'message' => __('evaluation_no_permission_view_result')
             ], 403);
         }
 
@@ -654,7 +738,7 @@ class EvaluationController extends Controller
         if (!$result) {
             return response()->json([
                 'success' => false,
-                'message' => 'Resultado no encontrado'
+                'message' => __('evaluation_result_not_found')
             ], 404);
         }
 
@@ -671,10 +755,10 @@ class EvaluationController extends Controller
     {
         $originalEvaluation = Evaluation::findOrFail($id);
 
-        if ($originalEvaluation->teacher_id !== Auth::id() && !Auth::user()->isAdmin()) {
+        if ((string) $originalEvaluation->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'No tienes permiso para duplicar esta evaluación'
+                'message' => __('evaluation_no_permission_duplicate')
             ], 403);
         }
 
@@ -684,7 +768,7 @@ class EvaluationController extends Controller
             // Duplicar evaluación
             $newEvaluation = $originalEvaluation->replicate();
             $newEvaluation->id = Str::uuid();
-            $newEvaluation->title = $originalEvaluation->title . ' (Copia)';
+            $newEvaluation->title = $originalEvaluation->title . __('evaluation_copy_suffix');
             $newEvaluation->is_published = false;
             $newEvaluation->created_at = now();
             $newEvaluation->updated_at = now();
@@ -704,16 +788,16 @@ class EvaluationController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Evaluación duplicada exitosamente',
+                'message' => __('evaluation_duplicated'),
                 'data' => $newEvaluation->load(['teacher', 'questions'])
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
+            report($e);
             return response()->json([
                 'success' => false,
-                'message' => 'Error al duplicar la evaluación',
-                'error' => $e->getMessage()
+                'message' => __('evaluation_duplicate_error')
             ], 500);
         }
     }
@@ -725,10 +809,10 @@ class EvaluationController extends Controller
     {
         $evaluation = Evaluation::findOrFail($id);
 
-        if ($evaluation->teacher_id !== Auth::id() && !Auth::user()->isAdmin()) {
+        if ((string) $evaluation->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'No tienes permiso para ver las estadísticas de esta evaluación'
+                'message' => __('evaluation_no_permission_view_stats')
             ], 403);
         }
 
@@ -752,6 +836,96 @@ class EvaluationController extends Controller
         ]);
     }
 
+    /**
+     * Evaluación adaptativa según rendimiento del estudiante
+     */
+    public function adaptive(Request $request)
+    {
+        $user = Auth::user();
+
+        $recentResults = EvaluationResult::where('user_id', $user->id)
+            ->where('status', 'completed')
+            ->with('evaluation')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        $typeScores = [];
+        foreach ($recentResults as $result) {
+            $type = $result->evaluation->type ?? 'practice';
+            if (!isset($typeScores[$type])) {
+                $typeScores[$type] = [];
+            }
+            $typeScores[$type][] = $result->score;
+        }
+
+        $avgScore = $recentResults->avg('score') ?? 0;
+
+        if ($avgScore >= 16) {
+            $difficulty = 'advanced';
+        } elseif ($avgScore >= 12) {
+            $difficulty = 'intermediate';
+        } else {
+            $difficulty = 'basic';
+        }
+
+        $evaluation = Evaluation::where('type', 'practice')
+            ->where('difficulty', $difficulty)
+            ->where('is_published', true)
+            ->where(function ($q) {
+                $q->where('due_date', '>=', now())
+                  ->orWhereNull('due_date');
+            })
+            ->with(['teacher', 'questions'])
+            ->first();
+
+        if (!$evaluation) {
+            $evaluation = Evaluation::where('difficulty', $difficulty)
+                ->where('is_published', true)
+                ->where(function ($q) {
+                    $q->where('due_date', '>=', now())
+                      ->orWhereNull('due_date');
+                })
+                ->with(['teacher', 'questions'])
+                ->first();
+        }
+
+        if (!$evaluation) {
+            return response()->json([
+                'success' => false,
+                'message' => __('evaluation_not_available')
+            ], 404);
+        }
+
+        if ($user->isStudent()) {
+            $evaluation->questions->each(function ($question) {
+                $question->makeHidden(['correct_answer']);
+            });
+
+            $result = EvaluationResult::where('user_id', $user->id)
+                ->where('evaluation_id', $evaluation->id)
+                ->first();
+
+            if ($result && $result->status === 'completed') {
+                $evaluation->already_completed = true;
+                $evaluation->result = $result;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => __('adaptive_evaluation'),
+            'data' => [
+                'difficulty' => $difficulty,
+                'average_score' => round($avgScore, 2),
+                'type_scores' => collect($typeScores)->map(function ($scores) {
+                    return round(collect($scores)->avg(), 2);
+                }),
+                'evaluation' => $evaluation
+            ]
+        ]);
+    }
+
     // ========== MÉTODOS PRIVADOS ==========
 
     /**
@@ -759,7 +933,28 @@ class EvaluationController extends Controller
      */
     private function checkAnswer($question, $answer)
     {
-        return strtolower(trim($answer)) === strtolower(trim($question->correct_answer));
+        $normalizedAnswer = $this->normalizeAnswer($answer);
+        $normalizedCorrect = $this->normalizeAnswer($question->correct_answer);
+
+        return $normalizedAnswer === $normalizedCorrect;
+    }
+
+    /**
+     * Normalizar respuesta para comparación matemática
+     */
+    private function normalizeAnswer(string $value): string
+    {
+        $value = strtolower(trim($value));
+        // Remove all whitespace
+        $value = preg_replace('/\s+/', '', $value);
+        // Normalize common math notation
+        $value = str_replace(['×', '÷', '²', '³'], ['*', '/', '^2', '^3'], $value);
+        // Remove trailing .0 for whole numbers (e.g., "4.0" -> "4")
+        $value = preg_replace('/\.0$/', '', $value);
+        // Remove leading zeros (e.g., "04" -> "4") but keep "0"
+        $value = preg_replace('/^0+(\d)/', '$1', $value);
+
+        return $value;
     }
 
     /**
@@ -805,7 +1000,7 @@ class EvaluationController extends Controller
         if ($total === 0) return 0;
 
         $passing = $results->filter(function($result) {
-            return $result->score >= 6;
+            return $result->score >= 12;
         })->count();
 
         return round(($passing / $total) * 100, 2);
@@ -832,20 +1027,20 @@ class EvaluationController extends Controller
     private function getScoreDistribution($results)
     {
         $distribution = [
-            '0-3' => 0,
-            '3-5' => 0,
-            '5-7' => 0,
-            '7-9' => 0,
-            '9-10' => 0
+            '0-6' => 0,
+            '6-12' => 0,
+            '12-15' => 0,
+            '15-18' => 0,
+            '18-20' => 0
         ];
 
         foreach ($results as $result) {
             $score = $result->score;
-            if ($score < 3) $distribution['0-3']++;
-            elseif ($score < 5) $distribution['3-5']++;
-            elseif ($score < 7) $distribution['5-7']++;
-            elseif ($score < 9) $distribution['7-9']++;
-            else $distribution['9-10']++;
+            if ($score < 6) $distribution['0-6']++;
+            elseif ($score < 12) $distribution['6-12']++;
+            elseif ($score < 15) $distribution['12-15']++;
+            elseif ($score < 18) $distribution['15-18']++;
+            else $distribution['18-20']++;
         }
 
         return $distribution;

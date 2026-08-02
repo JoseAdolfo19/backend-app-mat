@@ -40,4 +40,15 @@ return [
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
+
+    'fcm' => [
+        'key' => env('FCM_SERVER_KEY'),
+        'project_id' => env('FCM_PROJECT_ID'),
+    ],
+
+    'groq' => [
+        'key' => env('GROQ_API_KEY'),
+        'url' => env('GROQ_API_URL', 'https://api.groq.com/openai/v1/chat/completions'),
+        'model' => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
+    ],
 ];

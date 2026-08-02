@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\User;
 use App\Models\Role;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class AdminUserSeeder extends Seeder
@@ -19,7 +18,7 @@ class AdminUserSeeder extends Seeder
             [
                 'id' => Str::uuid(),
                 'full_name' => 'Administrador MathFlow',
-                'password' => Hash::make('admin123456'),
+                'password' => 'admin123456',
                 'role_id' => $adminRole->id,
                 'is_active' => true,
                 'provider' => 'email'

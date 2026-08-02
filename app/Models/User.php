@@ -3,14 +3,16 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Traits\AuditLoggable;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable, HasUuids;
+    use HasApiTokens, HasFactory, Notifiable, HasUuids, AuditLoggable, SoftDeletes;
 
     protected $keyType = 'string';
     public $incrementing = false;
@@ -20,6 +22,7 @@ class User extends Authenticatable
         'email',
         'password',
         'full_name',
+        'dni',
         'role_id',
         'is_active',
         'last_login',
@@ -44,6 +47,28 @@ class User extends Authenticatable
         'is_active' => 'boolean',
         'password' => 'hashed',
     ];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::created(function ($user) {
+            $user->logAudit('user.created', null, $user->only('id', 'full_name', 'email', 'role_id', 'is_active', 'provider'));
+        });
+
+        static::updated(function ($user) {
+            $changes = $user->getChanges();
+            $oldValues = [];
+            foreach (array_keys($changes) as $key) {
+                $oldValues[$key] = $user->getOriginal($key);
+            }
+            $user->logAudit('user.updated', $oldValues, $changes);
+        });
+
+        static::deleted(function ($user) {
+            $user->logAudit('user.deleted', $user->only('id', 'full_name', 'email'), null);
+        });
+    }
 
     // ========== RELACIONES ==========
     public function role()
@@ -94,27 +119,42 @@ class User extends Authenticatable
     // ========== MÉTODOS DE AYUDA ==========
     public function isAdmin()
     {
-        return $this->role->name === Role::ADMIN;
+        return $this->role?->name === Role::ADMIN;
     }
 
     public function isTeacher()
     {
-        return $this->role->name === Role::TEACHER;
+        return $this->role?->name === Role::TEACHER;
     }
 
     public function isStudent()
     {
-        return $this->role->name === Role::STUDENT;
+        return $this->role?->name === Role::STUDENT;
+    }
+
+    public function isParent()
+    {
+        return $this->role?->name === Role::PARENT;
+    }
+
+    public function children()
+    {
+        return $this->belongsToMany(User::class, 'parent_student', 'parent_id', 'student_id');
+    }
+
+    public function parents()
+    {
+        return $this->belongsToMany(User::class, 'parent_student', 'student_id', 'parent_id');
     }
 
     public function hasRole($roleName)
     {
-        return $this->role->name === $roleName;
+        return $this->role?->name === $roleName;
     }
 
     public function hasAnyRole($roles)
     {
-        return in_array($this->role->name, $roles);
+        return in_array($this->role?->name, $roles);
     }
 
     public function isGoogleUser()

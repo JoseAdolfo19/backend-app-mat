@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Traits\AuditLoggable;
 
 class Evaluation extends Model
 {
-    use HasUuids, SoftDeletes;
+    use HasUuids, SoftDeletes, AuditLoggable;
 
     protected $keyType = 'string';
     public $incrementing = false;
@@ -26,7 +27,10 @@ class Evaluation extends Model
         'is_published',
         'auto_correct',
         'randomize_questions',
-        'max_attempts'
+        'max_attempts',
+        'published_at',
+        'total_questions',
+        'total_points'
     ];
 
     protected $casts = [
@@ -35,8 +39,33 @@ class Evaluation extends Model
         'is_published' => 'boolean',
         'auto_correct' => 'boolean',
         'randomize_questions' => 'boolean',
-        'max_attempts' => 'integer'
+        'max_attempts' => 'integer',
+        'published_at' => 'datetime',
+        'total_questions' => 'integer',
+        'total_points' => 'integer'
     ];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::created(function ($evaluation) {
+            $evaluation->logAudit('evaluation.created', null, $evaluation->only('id', 'title', 'teacher_id', 'lesson_id', 'type', 'difficulty', 'is_published'));
+        });
+
+        static::updated(function ($evaluation) {
+            $changes = $evaluation->getChanges();
+            $oldValues = [];
+            foreach (array_keys($changes) as $key) {
+                $oldValues[$key] = $evaluation->getOriginal($key);
+            }
+            $evaluation->logAudit('evaluation.updated', $oldValues, $changes);
+        });
+
+        static::deleted(function ($evaluation) {
+            $evaluation->logAudit('evaluation.deleted', $evaluation->only('id', 'title', 'teacher_id', 'lesson_id'), null);
+        });
+    }
 
     // ========== CONSTANTES ==========
     const TYPE_EXAM = 'exam';

@@ -23,7 +23,7 @@
     <div class="summary">
         <div class="summary-item">
             <div class="summary-label">Promedio general</div>
-            <div class="summary-value">{{ number_format($summary['average'] ?? 0, 1) }}/10</div>
+            <div class="summary-value">{{ number_format($summary['average'] ?? 0, 1) }}/20</div>
         </div>
         <div class="summary-item">
             <div class="summary-label">Máximo</div>
@@ -36,6 +36,15 @@
         <div class="summary-item">
             <div class="summary-label">Total evaluaciones</div>
             <div class="summary-value">{{ $summary['total'] ?? 0 }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Calificación literal</div>
+            <div class="summary-value">
+                @php
+                    $avg = $summary['average'] ?? 0;
+                    echo $avg >= 18 ? 'AD' : ($avg >= 15 ? 'A' : ($avg >= 12 ? 'B' : 'C'));
+                @endphp
+            </div>
         </div>
     </div>
 
@@ -55,7 +64,7 @@
                     <td>{{ $row->user->full_name ?? 'Sin nombre' }}</td>
                     <td>{{ $row->user->email ?? '—' }}</td>
                     <td>{{ $row->evaluation->title ?? 'Sin título' }}</td>
-                    <td>{{ number_format($row->score ?? 0, 1) }}/10</td>
+                    <td>{{ number_format($row->score ?? 0, 1) }}/20</td>
                     <td>{{ optional($row->created_at)->format('d/m/Y') }}</td>
                 </tr>
             @empty

@@ -29,13 +29,13 @@ class RegisterRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'full_name.required' => 'El nombre completo es obligatorio',
-            'email.required' => 'El correo electrónico es obligatorio',
-            'email.unique' => 'El correo electrónico ya está registrado',
-            'password.required' => 'La contraseña es obligatoria',
-            'password.min' => 'La contraseña debe tener al menos 8 caracteres',
-            'password.confirmed' => 'Las contraseñas no coinciden',
-            'role.in' => 'El rol debe ser estudiante o docente'
+            'full_name.required' => __('validation_full_name_required'),
+            'email.required' => __('validation_email_required'),
+            'email.unique' => __('email_already_registered'),
+            'password.required' => __('validation_password_required'),
+            'password.min' => __('validation_password_min'),
+            'password.confirmed' => __('validation_password_confirmed'),
+            'role.in' => __('validation_role_invalid'),
         ];
     }
 }

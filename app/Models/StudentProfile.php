@@ -20,6 +20,7 @@ class StudentProfile extends Model
         'average_score',
         'total_time_spent',
         'current_streak',
+        'last_activity_date',
         'badges'
     ];
 
@@ -28,7 +29,8 @@ class StudentProfile extends Model
         'average_score' => 'float',
         'total_time_spent' => 'integer',
         'total_lessons_completed' => 'integer',
-        'current_streak' => 'integer'
+        'current_streak' => 'integer',
+        'last_activity_date' => 'date'
     ];
 
     // ========== RELACIONES ==========

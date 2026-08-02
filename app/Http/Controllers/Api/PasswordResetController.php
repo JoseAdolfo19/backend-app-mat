@@ -5,13 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Facades\Hash;
 
 class PasswordResetController extends Controller
 {
-    /**
-     * Enviar enlace de recuperación de contraseña
-     */
     public function sendResetLink(Request $request)
     {
         $request->validate([
@@ -24,18 +20,15 @@ class PasswordResetController extends Controller
 
         if ($status === Password::RESET_LINK_SENT) {
             return response()->json([
-                'message' => 'Enlace de recuperación enviado a tu correo'
+                'message' => __('password_reset_link_sent')
             ]);
         }
 
         return response()->json([
-            'message' => 'Error al enviar el enlace de recuperación'
+            'message' => __('password_reset_link_error')
         ], 400);
     }
 
-    /**
-     * Restablecer contraseña
-     */
     public function resetPassword(Request $request)
     {
         $request->validate([
@@ -47,19 +40,20 @@ class PasswordResetController extends Controller
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function ($user, $password) {
-                $user->password = Hash::make($password);
-                $user->save();
+                $user->forceFill([
+                    'password' => $password,
+                ])->save();
             }
         );
 
         if ($status === Password::PASSWORD_RESET) {
             return response()->json([
-                'message' => 'Contraseña restablecida exitosamente'
+                'message' => __('password_reset_success')
             ]);
         }
 
         return response()->json([
-            'message' => 'Token inválido o expirado'
+            'message' => __('password_token_invalid_or_expired')
         ], 400);
     }
 }

@@ -11,7 +11,7 @@ return [
 
     'guard' => ['web'],
 
-    'expiration' => null,
+    'expiration' => env('SANCTUM_EXPIRATION', 1440),
 
     'token_prefix' => env('SANCTUM_TOKEN_PREFIX', ''),
 
@@ -20,4 +20,6 @@ return [
         'encrypt_cookies' => Illuminate\Cookie\Middleware\EncryptCookies::class,
         'validate_csrf_token' => Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
     ],
+
+    'prune_expiration_days' => 7,
 ];

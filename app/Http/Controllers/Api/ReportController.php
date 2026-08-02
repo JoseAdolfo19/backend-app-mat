@@ -4,16 +4,23 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Role;
 use App\Models\Lesson;
 use App\Models\Evaluation;
 use App\Models\EvaluationResult;
 use App\Models\LessonProgress;
+use App\Models\ActivityLog;
+use App\Models\SubmittedWork;
 use App\Exports\GradesExport;
+use App\Exports\GradesPDFExport;
+use App\Exports\StudentProgressPDFExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Maatwebsite\Excel\Facades\Excel;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 class ReportController extends Controller
 {
@@ -37,20 +44,20 @@ class ReportController extends Controller
             $query->whereBetween('created_at', $this->getPeriodDateRange($request->period));
         }
 
-        // Si es docente, solo ver sus estudiantes
+        // Si es docente, solo ver resultados de sus propias evaluaciones
         if (Auth::user()->isTeacher()) {
-            $studentIds = User::where('role_id', 3)->pluck('id');
-            $query->whereIn('user_id', $studentIds);
+            $evaluationIds = Evaluation::where('teacher_id', Auth::id())->pluck('id');
+            $query->whereIn('evaluation_id', $evaluationIds);
         }
 
         // Estadísticas
         $stats = [
-            'total_evaluations' => $query->count(),
-            'average_score' => $query->avg('score'),
-            'total_students' => $query->distinct('user_id')->count('user_id'),
-            'passing_rate' => $this->calculatePassingRate($query),
-            'top_performers' => $this->getTopPerformers($query),
-            'difficulty_areas' => $this->getDifficultyAreas($query)
+            'total_evaluations' => (clone $query)->count(),
+            'average_score' => (clone $query)->avg('score'),
+            'total_students' => (clone $query)->distinct('user_id')->count('user_id'),
+            'passing_rate' => $this->calculatePassingRate(clone $query),
+            'top_performers' => $this->getTopPerformers(clone $query),
+            'difficulty_areas' => $this->getDifficultyAreas(clone $query)
         ];
 
         return response()->json(['data' => $stats]);
@@ -70,7 +77,7 @@ class ReportController extends Controller
         $query = $this->buildGradesQuery($request);
 
         $results = $query->orderBy('created_at', 'desc')
-            ->paginate($request->per_page ?? 20);
+            ->paginate(min((int) ($request->per_page ?? 20), 50));
 
         // Resumen estadístico (recalculado sin paginar)
         $summaryQuery = $this->buildGradesQuery($request);
@@ -106,7 +113,7 @@ class ReportController extends Controller
 
             if (!$hasResults) {
                 return response()->json([
-                    'message' => 'No tienes acceso a los datos de este estudiante'
+                    'message' => __('report_no_access_student_data')
                 ], 403);
             }
         }
@@ -182,7 +189,590 @@ class ReportController extends Controller
         return Excel::download(new GradesExport($rows), $filename);
     }
 
+    /**
+     * Exportar reporte de rendimiento en PDF
+     */
+    public function exportPerformancePDF(Request $request)
+    {
+        $teacherId = Auth::user()->isTeacher() ? Auth::id() : null;
+        $filters = array_filter([
+            'student_id' => $request->student_id,
+            'evaluation_id' => $request->evaluation_id,
+            'area' => $request->area,
+        ]);
+
+        $export = new GradesPDFExport($teacherId, $filters);
+        $data = $export->getData();
+        $summary = $export->getSummary();
+
+        $html = $this->buildPerformanceHTML($data, $summary);
+
+        $options = new Options();
+        $options->set('isRemoteEnabled', true);
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->render();
+
+        return $dompdf->download('reporte-rendimiento.pdf');
+    }
+
+    /**
+     * Exportar reporte de rendimiento en Excel
+     */
+    public function exportPerformanceExcel(Request $request)
+    {
+        $teacherId = Auth::user()->isTeacher() ? Auth::id() : null;
+        $filters = array_filter([
+            'student_id' => $request->student_id,
+            'evaluation_id' => $request->evaluation_id,
+            'area' => $request->area,
+        ]);
+
+        $lang = $request->language ?? 'es';
+
+        return Excel::download(new GradesExport(
+            (new GradesPDFExport($teacherId, $filters))->getData(),
+            $lang
+        ), 'reporte-rendimiento.xlsx');
+    }
+
+    /**
+     * Exportar reporte de un estudiante en PDF
+     */
+    public function exportStudentReportPDF(Request $request, $studentId)
+    {
+        $student = User::findOrFail($studentId);
+        $export = new StudentProgressPDFExport($studentId);
+        $studentData = $export->getData();
+
+        $html = $this->buildStudentProgressHTML($studentData);
+
+        $options = new Options();
+        $options->set('isRemoteEnabled', true);
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        return $dompdf->download('reporte-estudiante-' . $studentId . '.pdf');
+    }
+
+    /**
+     * Exportar reporte de un estudiante en Excel
+     */
+    public function exportStudentReportExcel(Request $request, $studentId)
+    {
+        $export = new StudentProgressPDFExport($studentId);
+        $studentData = $export->getData();
+
+        return Excel::download(new \App\Exports\StudentProgressExport($studentData), 'reporte-estudiante-' . $studentId . '.xlsx');
+    }
+
+    /**
+     * Exportar todas las calificaciones en PDF
+     */
+    public function exportGradesPDF(Request $request)
+    {
+        $teacherId = Auth::user()->isTeacher() ? Auth::id() : null;
+        $filters = array_filter([
+            'student_id' => $request->student_id,
+            'evaluation_id' => $request->evaluation_id,
+            'area' => $request->area,
+        ]);
+
+        $export = new GradesPDFExport($teacherId, $filters);
+        $data = $export->getData();
+        $summary = $export->getSummary();
+
+        $html = $this->buildGradesHTML($data, $summary);
+
+        $options = new Options();
+        $options->set('isRemoteEnabled', true);
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->render();
+
+        return $dompdf->download('calificaciones.pdf');
+    }
+
+    /**
+     * Exportar todas las calificaciones en Excel
+     */
+    public function exportGradesExcel(Request $request)
+    {
+        $teacherId = Auth::user()->isTeacher() ? Auth::id() : null;
+        $filters = array_filter([
+            'student_id' => $request->student_id,
+            'evaluation_id' => $request->evaluation_id,
+            'area' => $request->area,
+        ]);
+
+        $lang = $request->language ?? 'es';
+
+        return Excel::download(new GradesExport(
+            (new GradesPDFExport($teacherId, $filters))->getData(),
+            $lang
+        ), 'calificaciones.xlsx');
+    }
+
+    // ========== HTML BUILDERS ==========
+
+    /**
+     * Enhanced performance report with filters.
+     */
+    public function filteredPerformanceReport(Request $request)
+    {
+        $request->validate([
+            'unit' => 'nullable|string',
+            'student_id' => 'nullable|exists:users,id',
+            'teacher_id' => 'nullable|exists:users,id',
+            'period' => 'nullable|in:week,month,quarter,year,current,last_month,last_quarter,all_time',
+        ]);
+
+        $evalQuery = EvaluationResult::with(['user', 'evaluation.lesson'])
+            ->where('status', 'completed');
+
+        $workQuery = SubmittedWork::with(['student', 'lesson', 'evaluation'])
+            ->where('status', 'graded');
+
+        if ($request->filled('student_id')) {
+            $evalQuery->where('user_id', $request->student_id);
+            $workQuery->where('student_id', $request->student_id);
+        }
+
+        if ($request->filled('unit')) {
+            $evalQuery->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $request->unit));
+            $workQuery->whereHas('lesson', fn ($q) => $q->where('unit', $request->unit));
+        }
+
+        if ($request->filled('teacher_id')) {
+            $teacherEvaluationIds = Evaluation::where('teacher_id', $request->teacher_id)->pluck('id');
+            $teacherLessonIds = \App\Models\Lesson::where('teacher_id', $request->teacher_id)->pluck('id');
+            $evalQuery->whereIn('evaluation_id', $teacherEvaluationIds);
+            $workQuery->whereIn('lesson_id', $teacherLessonIds);
+        }
+
+        if ($request->filled('period') && $request->period !== 'all_time') {
+            $range = $this->getPeriodDateRange($request->period);
+            $evalQuery->whereBetween('created_at', $range);
+            $workQuery->whereBetween('created_at', $range);
+        }
+
+        $evalResults = $evalQuery->get();
+        $works = $workQuery->get();
+
+        $studentGroups = $evalResults->groupBy('user_id')->map(function ($results) use ($works) {
+            $studentId = $results->first()->user_id;
+            $studentWorks = $works->where('student_id', $studentId);
+
+            return [
+                'student' => $results->first()->user,
+                'evaluations' => [
+                    'count' => $results->count(),
+                    'average' => round($results->avg('score'), 2),
+                ],
+                'submitted_works' => [
+                    'count' => $studentWorks->count(),
+                    'average' => $studentWorks->count() > 0 ? round($studentWorks->avg('score'), 2) : null,
+                ],
+                'overall_average' => round(
+                    collect([$results->avg('score'), $studentWorks->avg('score')])
+                        ->filter()
+                        ->avg(),
+                    2
+                ),
+            ];
+        })->sortByDesc('overall_average')->values();
+
+        return response()->json([
+            'data' => $studentGroups,
+            'summary' => [
+                'total_students' => $studentGroups->count(),
+                'class_average' => $studentGroups->count() > 0
+                    ? round($studentGroups->avg('overall_average'), 2)
+                    : null,
+            ],
+        ]);
+    }
+
+    /**
+     * Detailed student report across all courses.
+     */
+    public function studentDetailReport(Request $request, $studentId)
+    {
+        $student = \App\Models\User::findOrFail($studentId);
+
+        $areas = ['Álgebra', 'Geometría', 'Trigonometría'];
+        $courses = [];
+
+        foreach ($areas as $area) {
+            $evalResults = EvaluationResult::where('user_id', $studentId)
+                ->where('status', 'completed')
+                ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $area))
+                ->get();
+
+            $works = SubmittedWork::where('student_id', $studentId)
+                ->where('status', 'graded')
+                ->where(function ($q) use ($area) {
+                    $q->whereHas('lesson', fn ($lq) => $lq->where('unit', $area))
+                      ->orWhereHas('evaluation.lesson', fn ($lq) => $lq->where('unit', $area));
+                })
+                ->get();
+
+            if ($evalResults->isEmpty() && $works->isEmpty()) {
+                continue;
+            }
+
+            $allScores = $evalResults->pluck('score')->merge($works->pluck('score'));
+            $average = $allScores->count() > 0 ? round($allScores->avg(), 2) : null;
+
+            // Ranking within this area
+            $allStudentAvgs = DB::table('evaluation_results')
+                ->where('status', 'completed')
+                ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $area))
+                ->select('user_id', DB::raw('AVG(score) as avg'))
+                ->groupBy('user_id')
+                ->get();
+
+            $rank = $allStudentAvgs->where('avg', '>', $average ?? 0)->count() + 1;
+
+            $courses[] = [
+                'area' => $area,
+                'evaluations_count' => $evalResults->count(),
+                'submitted_works_count' => $works->count(),
+                'average' => $average,
+                'ranking_position' => $rank,
+            ];
+        }
+
+        $allScores = collect();
+        foreach ($courses as $c) {
+            if ($c['average'] !== null) {
+                $allScores->push($c['average']);
+            }
+        }
+
+        return response()->json([
+            'student' => $student,
+            'courses' => $courses,
+            'overall_average' => $allScores->count() > 0 ? round($allScores->avg(), 2) : null,
+        ]);
+    }
+
+    /**
+     * Detailed course report for a specific unit.
+     */
+    public function courseDetailReport(Request $request, $unit)
+    {
+        $students = DB::table('evaluation_results')
+            ->where('status', 'completed')
+            ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $unit))
+            ->select('user_id')
+            ->groupBy('user_id')
+            ->pluck('user_id')
+            ->merge(
+                SubmittedWork::where('status', 'graded')
+                    ->whereHas('lesson', fn ($q) => $q->where('unit', $unit))
+                    ->pluck('student_id')
+            )
+            ->unique();
+
+        $studentData = $students->map(function ($studentId) use ($unit) {
+            $user = \App\Models\User::find($studentId);
+            $evalAvg = EvaluationResult::where('user_id', $studentId)
+                ->where('status', 'completed')
+                ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $unit))
+                ->avg('score');
+
+            $worksCount = SubmittedWork::where('student_id', $studentId)
+                ->where('status', 'graded')
+                ->whereHas('lesson', fn ($q) => $q->where('unit', $unit))
+                ->count();
+
+            $workAvg = SubmittedWork::where('student_id', $studentId)
+                ->where('status', 'graded')
+                ->whereHas('lesson', fn ($q) => $q->where('unit', $unit))
+                ->avg('score');
+
+            $scores = collect(array_filter([$evalAvg, $workAvg]));
+            $average = $scores->count() > 0 ? round($scores->avg(), 2) : null;
+
+            return [
+                'student_id' => $studentId,
+                'student_name' => $user?->full_name ?? 'Unknown',
+                'average' => $average,
+                'evaluations_count' => EvaluationResult::where('user_id', $studentId)
+                    ->where('status', 'completed')
+                    ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $unit))
+                    ->count(),
+                'submitted_works_count' => $worksCount,
+            ];
+        })->sortByDesc('average')->values();
+
+        $averages = $studentData->pluck('average')->filter();
+        $passCount = $averages->where('>=', 12)->count();
+
+        $stats = [
+            'total_students' => $studentData->count(),
+            'average' => $averages->count() > 0 ? round($averages->avg(), 2) : null,
+            'median' => $averages->count() > 0 ? round($averages->median(), 2) : null,
+            'pass_rate' => $averages->count() > 0 ? round(($passCount / $averages->count()) * 100, 2) : null,
+            'top_5' => $studentData->take(5),
+        ];
+
+        return response()->json([
+            'unit' => $unit,
+            'students' => $studentData,
+            'statistics' => $stats,
+        ]);
+    }
+
+    private function buildPerformanceHTML($data, $summary)
+    {
+        $areaRows = '';
+        foreach ($summary['by_area'] as $area) {
+            $areaRows .= '<tr>';
+            $areaRows .= '<td>' . htmlspecialchars($area['area'] ?? 'N/A') . '</td>';
+            $areaRows .= '<td>' . $area['count'] . '</td>';
+            $areaRows .= '<td>' . number_format($area['average'], 2) . '</td>';
+            $areaRows .= '</tr>';
+        }
+
+        $detailRows = '';
+        foreach ($data as $row) {
+            $detailRows .= '<tr>';
+            $detailRows .= '<td>' . htmlspecialchars($row->student_name) . '</td>';
+            $detailRows .= '<td>' . htmlspecialchars($row->evaluation_title) . '</td>';
+            $detailRows .= '<td>' . htmlspecialchars($row->lesson_title ?? 'N/A') . '</td>';
+            $detailRows .= '<td>' . htmlspecialchars($row->area ?? 'N/A') . '</td>';
+            $detailRows .= '<td>' . number_format($row->score, 1) . '</td>';
+            $detailRows .= '<td>' . $row->correct_answers . '/' . $row->total_questions . '</td>';
+            $detailRows .= '<td>' . $row->completed_at . '</td>';
+            $detailRows .= '</tr>';
+        }
+
+        return '
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8">
+        <style>
+            body { font-family: Arial, sans-serif; font-size: 10px; color: #333; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 3px solid #2563eb; padding-bottom: 15px; }
+            .header h1 { color: #2563eb; margin: 0; font-size: 22px; }
+            .header p { color: #666; margin: 5px 0 0; font-size: 11px; }
+            .summary { margin-bottom: 25px; }
+            .summary h2 { color: #2563eb; font-size: 14px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+            .stats-grid { display: flex; gap: 10px; margin-bottom: 15px; }
+            .stat-box { flex: 1; background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px; text-align: center; }
+            .stat-box .value { font-size: 18px; font-weight: bold; color: #1e40af; }
+            .stat-box .label { font-size: 9px; color: #666; margin-top: 3px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th { background: #2563eb; color: #fff; padding: 8px 6px; text-align: left; font-size: 9px; }
+            td { padding: 6px; border-bottom: 1px solid #e5e7eb; font-size: 9px; }
+            tr:nth-child(even) { background: #f9fafb; }
+            .section-title { color: #2563eb; font-size: 13px; margin: 20px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+        </style></head>
+        <body>
+            <div class="header">
+                <h1>MathFlow - Reporte de Rendimiento</h1>
+                <p>Generado: ' . now()->format('d/m/Y H:i') . '</p>
+            </div>
+            <div class="summary">
+                <h2>Resumen General</h2>
+                <div class="stats-grid">
+                    <div class="stat-box"><div class="value">' . $summary["total_results"] . '</div><div class="label">Total Resultados</div></div>
+                    <div class="stat-box"><div class="value">' . number_format($summary["average_score"], 1) . '</div><div class="label">Promedio General</div></div>
+                    <div class="stat-box"><div class="value">' . number_format($summary["max_score"], 1) . '</div><div class="label">Puntaje Máximo</div></div>
+                    <div class="stat-box"><div class="value">' . number_format($summary["min_score"], 1) . '</div><div class="label">Puntaje Mínimo</div></div>
+                </div>
+            </div>
+            <div class="section-title">Desempeño por Área</div>
+            <table>
+                <thead><tr><th>Área</th><th>Cantidad</th><th>Promedio</th></tr></thead>
+                <tbody>' . $areaRows . '</tbody>
+            </table>
+            <div class="section-title">Resultados Detallados</div>
+            <table>
+                <thead><tr><th>Estudiante</th><th>Evaluación</th><th>Lección</th><th>Área</th><th>Puntaje</th><th>Correctas/Total</th><th>Fecha</th></tr></thead>
+                <tbody>' . $detailRows . '</tbody>
+            </table>
+        </body></html>';
+    }
+
+    private function buildStudentProgressHTML($studentData)
+    {
+        $student = $studentData['student'];
+        $stats = $studentData['stats'];
+
+        $lessonRows = '';
+        foreach ($studentData['lessons'] as $lesson) {
+            $statusColor = $lesson->status === 'completed' ? '#16a34a' : ($lesson->status === 'in_progress' ? '#d97706' : '#6b7280');
+            $lessonRows .= '<tr>';
+            $lessonRows .= '<td>' . htmlspecialchars($lesson->title) . '</td>';
+            $lessonRows .= '<td>' . htmlspecialchars($lesson->unit ?? 'N/A') . '</td>';
+            $lessonRows .= '<td><span style="color:' . $statusColor . ';font-weight:bold;">' . ucfirst($lesson->status) . '</span></td>';
+            $lessonRows .= '<td>' . ($lesson->progress_percentage ?? 0) . '%</td>';
+            $lessonRows .= '<td>' . ($lesson->updated_at ? $lesson->updated_at->format('d/m/Y') : 'N/A') . '</td>';
+            $lessonRows .= '</tr>';
+        }
+
+        $evalRows = '';
+        foreach ($studentData['evaluations'] as $eval) {
+            $evalRows .= '<tr>';
+            $evalRows .= '<td>' . htmlspecialchars($eval->title) . '</td>';
+            $evalRows .= '<td>' . number_format($eval->score, 1) . '</td>';
+            $evalRows .= '<td>' . $eval->correct_answers . '/' . $eval->total_questions . '</td>';
+            $evalRows .= '<td>' . ($eval->created_at ? $eval->created_at->format('d/m/Y H:i') : 'N/A') . '</td>';
+            $evalRows .= '</tr>';
+        }
+
+        return '
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8">
+        <style>
+            body { font-family: Arial, sans-serif; font-size: 10px; color: #333; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 3px solid #2563eb; padding-bottom: 15px; }
+            .header h1 { color: #2563eb; margin: 0; font-size: 22px; }
+            .header p { color: #666; margin: 5px 0 0; font-size: 11px; }
+            .student-info { background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 12px; margin-bottom: 20px; }
+            .student-info h2 { margin: 0 0 5px; color: #1e40af; font-size: 14px; }
+            .stats-grid { display: flex; gap: 10px; margin-bottom: 20px; }
+            .stat-box { flex: 1; background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px; text-align: center; }
+            .stat-box .value { font-size: 18px; font-weight: bold; color: #1e40af; }
+            .stat-box .label { font-size: 9px; color: #666; margin-top: 3px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th { background: #2563eb; color: #fff; padding: 8px 6px; text-align: left; font-size: 9px; }
+            td { padding: 6px; border-bottom: 1px solid #e5e7eb; font-size: 9px; }
+            tr:nth-child(even) { background: #f9fafb; }
+            .section-title { color: #2563eb; font-size: 13px; margin: 20px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+        </style></head>
+        <body>
+            <div class="header">
+                <h1>MathFlow - Reporte del Estudiante</h1>
+                <p>Generado: ' . now()->format('d/m/Y H:i') . '</p>
+            </div>
+            <div class="student-info">
+                <h2>' . htmlspecialchars($student->full_name ?? 'N/A') . '</h2>
+                <p>Email: ' . htmlspecialchars($student->email ?? 'N/A') . '</p>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-box"><div class="value">' . $stats["lessons_completed"] . '</div><div class="label">Lecciones Completadas</div></div>
+                <div class="stat-box"><div class="value">' . $stats["lessons_in_progress"] . '</div><div class="label">En Progreso</div></div>
+                <div class="stat-box"><div class="value">' . number_format($stats["average_score"], 1) . '</div><div class="label">Promedio</div></div>
+                <div class="stat-box"><div class="value">' . $stats["total_evaluations"] . '</div><div class="label">Evaluaciones</div></div>
+            </div>
+            <div class="section-title">Progreso en Lecciones</div>
+            <table>
+                <thead><tr><th>Lección</th><th>Unidad</th><th>Estado</th><th>Progreso</th><th>Última Actualización</th></tr></thead>
+                <tbody>' . $lessonRows . '</tbody>
+            </table>
+            <div class="section-title">Historial de Evaluaciones</div>
+            <table>
+                <thead><tr><th>Evaluación</th><th>Puntaje</th><th>Correctas/Total</th><th>Fecha</th></tr></thead>
+                <tbody>' . $evalRows . '</tbody>
+            </table>
+        </body></html>';
+    }
+
+    private function buildGradesHTML($data, $summary)
+    {
+        $detailRows = '';
+        foreach ($data as $row) {
+            $detailRows .= '<tr>';
+            $detailRows .= '<td>' . htmlspecialchars($row->student_name) . '</td>';
+            $detailRows .= '<td>' . htmlspecialchars($row->student_email ?? '') . '</td>';
+            $detailRows .= '<td>' . htmlspecialchars($row->evaluation_title) . '</td>';
+            $detailRows .= '<td>' . htmlspecialchars($row->area ?? 'N/A') . '</td>';
+            $detailRows .= '<td>' . number_format($row->score, 1) . '</td>';
+            $detailRows .= '<td>' . $row->correct_answers . '/' . $row->total_questions . '</td>';
+            $detailRows .= '<td>' . $row->completed_at . '</td>';
+            $detailRows .= '</tr>';
+        }
+
+        return '
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8">
+        <style>
+            body { font-family: Arial, sans-serif; font-size: 10px; color: #333; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 3px solid #2563eb; padding-bottom: 15px; }
+            .header h1 { color: #2563eb; margin: 0; font-size: 22px; }
+            .header p { color: #666; margin: 5px 0 0; font-size: 11px; }
+            .stats-grid { display: flex; gap: 10px; margin-bottom: 20px; }
+            .stat-box { flex: 1; background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px; text-align: center; }
+            .stat-box .value { font-size: 18px; font-weight: bold; color: #1e40af; }
+            .stat-box .label { font-size: 9px; color: #666; margin-top: 3px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th { background: #2563eb; color: #fff; padding: 8px 6px; text-align: left; font-size: 9px; }
+            td { padding: 6px; border-bottom: 1px solid #e5e7eb; font-size: 9px; }
+            tr:nth-child(even) { background: #f9fafb; }
+            .section-title { color: #2563eb; font-size: 13px; margin: 20px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+        </style></head>
+        <body>
+            <div class="header">
+                <h1>MathFlow - Calificaciones</h1>
+                <p>Generado: ' . now()->format('d/m/Y H:i') . '</p>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-box"><div class="value">' . $summary["total_results"] . '</div><div class="label">Total Registros</div></div>
+                <div class="stat-box"><div class="value">' . number_format($summary["average_score"], 1) . '</div><div class="label">Promedio</div></div>
+                <div class="stat-box"><div class="value">' . number_format($summary["max_score"], 1) . '</div><div class="label">Máximo</div></div>
+                <div class="stat-box"><div class="value">' . number_format($summary["min_score"], 1) . '</div><div class="label">Mínimo</div></div>
+            </div>
+            <div class="section-title">Detalle de Calificaciones</div>
+            <table>
+                <thead><tr><th>Estudiante</th><th>Email</th><th>Evaluación</th><th>Área</th><th>Puntaje</th><th>Correctas/Total</th><th>Fecha</th></tr></thead>
+                <tbody>' . $detailRows . '</tbody>
+            </table>
+        </body></html>';
+    }
+
     // ========== MÉTODOS PRIVADOS DE AYUDA ==========
+
+    /**
+     * Reporte de participación
+     */
+    public function participationReport(Request $request)
+    {
+        $thirtyDaysAgo = now()->subDays(30);
+
+        $activitiesByType = ActivityLog::where('created_at', '>=', $thirtyDaysAgo)
+            ->select('activity_type', DB::raw('COUNT(*) as total'))
+            ->groupBy('activity_type')
+            ->get()
+            ->pluck('total', 'activity_type');
+
+        $activitiesPerDay = ActivityLog::where('created_at', '>=', $thirtyDaysAgo)
+            ->select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as total'))
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        $mostActiveStudents = ActivityLog::where('created_at', '>=', $thirtyDaysAgo)
+            ->whereNotNull('user_id')
+            ->select('user_id', DB::raw('COUNT(*) as total'))
+            ->groupBy('user_id')
+            ->orderByDesc('total')
+            ->limit(10)
+            ->with('user')
+            ->get();
+
+        $firstHalf = ActivityLog::whereBetween('created_at', [$thirtyDaysAgo, now()->subDays(15)])->count();
+        $secondHalf = ActivityLog::where('created_at', '>=', now()->subDays(15))->count();
+        $activityTrend = $secondHalf >= $firstHalf ? 'increasing' : 'decreasing';
+
+        return response()->json([
+            'data' => [
+                'activities_by_type' => $activitiesByType,
+                'activities_per_day' => $activitiesPerDay,
+                'most_active_students' => $mostActiveStudents,
+                'activity_trend' => $activityTrend,
+            ]
+        ]);
+    }
 
     /**
      * Construye el query base de calificaciones, aplicando los mismos filtros
@@ -218,7 +808,7 @@ class ReportController extends Controller
         $total = $query->count();
         if ($total === 0) return 0;
 
-        $passing = $query->where('score', '>=', 6)->count();
+        $passing = $query->where('score', '>=', 12)->count();
         return round(($passing / $total) * 100, 2);
     }
 
@@ -234,7 +824,7 @@ class ReportController extends Controller
 
     private function getDifficultyAreas($query)
     {
-        return EvaluationResult::whereIn('id', $query->pluck('id'))
+        return EvaluationResult::whereIn('evaluation_results.id', $query->pluck('id'))
             ->join('evaluations', 'evaluation_results.evaluation_id', '=', 'evaluations.id')
             ->select('evaluations.type', DB::raw('AVG(score) as avg_score'), DB::raw('COUNT(*) as total'))
             ->groupBy('evaluations.type')
@@ -245,21 +835,13 @@ class ReportController extends Controller
     {
         $now = now();
 
-        switch ($period) {
-            case 'week':
-                return [$now->copy()->startOfWeek(), $now->copy()->endOfWeek()];
-            case 'month':
-            case 'last_month':
-                return [$now->copy()->subMonth()->startOfMonth(), $now->copy()->subMonth()->endOfMonth()];
-            case 'quarter':
-            case 'last_quarter':
-                return [$now->copy()->subQuarter()->startOfQuarter(), $now->copy()->subQuarter()->endOfQuarter()];
-            case 'year':
-                return [$now->copy()->startOfYear(), $now->copy()->endOfYear()];
-            case 'current':
-            default:
-                return [$now->copy()->subDays(30), $now];
-        }
+        return match ($period) {
+            'week' => [$now->copy()->startOfWeek(), $now->copy()->endOfWeek()],
+            'month', 'last_month' => [$now->copy()->subMonth()->startOfMonth(), $now->copy()->subMonth()->endOfMonth()],
+            'quarter', 'last_quarter' => [$now->copy()->subQuarter()->startOfQuarter(), $now->copy()->subQuarter()->endOfQuarter()],
+            'year' => [$now->copy()->startOfYear(), $now->copy()->endOfYear()],
+            default => [$now->copy()->subDays(30), $now],
+        };
     }
 
     private function analyzeStrengths($evaluationResults)
@@ -268,7 +850,7 @@ class ReportController extends Controller
             return [
                 'strengths' => [],
                 'weaknesses' => [],
-                'recommendations' => ['Completa más evaluaciones para obtener un análisis detallado']
+                'recommendations' => [__('report_complete_more_evaluations')]
             ];
         }
 
@@ -280,7 +862,7 @@ class ReportController extends Controller
             $analysis[$type] = [
                 'average' => $avgScore,
                 'count' => $results->count(),
-                'status' => $avgScore >= 7 ? 'strength' : ($avgScore >= 5 ? 'neutral' : 'weakness')
+                'status' => $avgScore >= 15 ? 'strength' : ($avgScore >= 12 ? 'neutral' : 'weakness')
             ];
         }
 
@@ -297,13 +879,13 @@ class ReportController extends Controller
         }
 
         if (!empty($weaknesses)) {
-            $recommendations[] = 'Fortalecer áreas débiles: ' . implode(', ', $weaknesses);
+            $recommendations[] = __('report_strengthen_weak_areas', ['areas' => implode(', ', $weaknesses)]);
         }
         if (!empty($strengths)) {
-            $recommendations[] = 'Mantener fortalezas en: ' . implode(', ', $strengths);
+            $recommendations[] = __('report_maintain_strengths', ['areas' => implode(', ', $strengths)]);
         }
         if (empty($recommendations)) {
-            $recommendations[] = 'Continúa con tu buen desempeño. ¡Sigue así!';
+            $recommendations[] = __('report_keep_up_good_work');
         }
 
         return [

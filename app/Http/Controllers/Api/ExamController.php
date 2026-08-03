@@ -668,6 +668,12 @@ class ExamController extends Controller
     private function normalizeAnswer(string $value): string
     {
         $value = strtolower(trim($value));
+        if (in_array($value, ['verdadero', 'true', 'v'])) {
+            return 'true';
+        }
+        if (in_array($value, ['falso', 'false', 'f'])) {
+            return 'false';
+        }
         $value = preg_replace('/\s+/', '', $value);
         $value = str_replace(['×', '÷', '²', '³'], ['*', '/', '^2', '^3'], $value);
         $value = preg_replace('/\.0$/', '', $value);

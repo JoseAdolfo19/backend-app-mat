@@ -945,6 +945,12 @@ class EvaluationController extends Controller
     private function normalizeAnswer(string $value): string
     {
         $value = strtolower(trim($value));
+        if (in_array($value, ['verdadero', 'true', 'v'])) {
+            return 'true';
+        }
+        if (in_array($value, ['falso', 'false', 'f'])) {
+            return 'false';
+        }
         // Remove all whitespace
         $value = preg_replace('/\s+/', '', $value);
         // Normalize common math notation

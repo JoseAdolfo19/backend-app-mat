@@ -123,6 +123,6 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
-    'cors_origins' => env('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://localhost:8000'),
+    'cors_origins' => env('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://localhost:8000,https://frontend-app-mat.vercel.app'),
 
 ];

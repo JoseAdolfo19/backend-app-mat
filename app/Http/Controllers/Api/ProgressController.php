@@ -228,6 +228,11 @@ class ProgressController extends Controller
      */
     public function updateLessonProgress(Request $request, $lessonId)
     {
+        // Solo estudiantes avanzan en lecciones
+        if (!Auth::user()->isStudent()) {
+            return response()->json(['message' => 'Solo los estudiantes pueden actualizar el progreso'], 403);
+        }
+
         $validated = $request->validate([
             'progress' => 'required|integer|min:0|max:100',
             'time_spent' => 'nullable|integer|min:0',
@@ -352,6 +357,15 @@ class ProgressController extends Controller
     {
         $user = Auth::user();
         $studentProfile = $user->studentProfile;
+
+        // Solo estudiantes tienen insignias
+        if (!$studentProfile) {
+            return response()->json([
+                'badges' => [],
+                'unlocked_count' => 0,
+                'total_badges' => 0
+            ]);
+        }
 
         $badges = $studentProfile->badges ?? [];
 
@@ -519,6 +533,12 @@ class ProgressController extends Controller
     {
         $user = Auth::user();
         $studentProfile = $user->studentProfile;
+
+        // Solo estudiantes tienen perfil y pueden ganar insignias/rachas
+        if (!$studentProfile) {
+            return [];
+        }
+
         $badges = $studentProfile->badges ?? [];
         $newBadges = [];
 

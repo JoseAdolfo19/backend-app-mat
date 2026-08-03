@@ -531,14 +531,26 @@ class ReportController extends Controller
 
     private function buildPerformanceHTML($data, $summary)
     {
-        $areaRows = '';
-        foreach ($summary['by_area'] as $area) {
-            $areaRows .= '<tr>';
-            $areaRows .= '<td>' . htmlspecialchars($area['area'] ?? 'N/A') . '</td>';
-            $areaRows .= '<td>' . $area['count'] . '</td>';
-            $areaRows .= '<td>' . number_format($area['average'], 2) . '</td>';
-            $areaRows .= '</tr>';
+        $typeRows = '';
+        foreach ($summary['by_type'] as $type) {
+            $typeRows .= '<tr>';
+            $typeRows .= '<td>' . htmlspecialchars($type['type'] ?? 'N/A') . '</td>';
+            $typeRows .= '<td>' . $type['count'] . '</td>';
+            $typeRows .= '<td>' . number_format($type['average'], 2) . '</td>';
+            $typeRows .= '</tr>';
         }
+
+        $topRows = '';
+        foreach ($summary['top_students'] as $i => $student) {
+            $topRows .= '<tr>';
+            $topRows .= '<td>' . ($i + 1) . '</td>';
+            $topRows .= '<td>' . htmlspecialchars($student['student_name'] ?? 'N/A') . '</td>';
+            $topRows .= '<td>' . $student['count'] . '</td>';
+            $topRows .= '<td>' . number_format($student['average'], 2) . '</td>';
+            $topRows .= '</tr>';
+        }
+
+        $chartImage = $this->renderBarChartImage($summary['by_type'], 'type');
 
         $detailRows = '';
         foreach ($data as $row) {
@@ -548,6 +560,7 @@ class ReportController extends Controller
             $detailRows .= '<td>' . htmlspecialchars($row->lesson_title ?? 'N/A') . '</td>';
             $detailRows .= '<td>' . htmlspecialchars($row->area ?? 'N/A') . '</td>';
             $detailRows .= '<td>' . number_format($row->score, 1) . '</td>';
+            $detailRows .= '<td><strong>' . \App\Exports\GradesPDFExport::gradeLetter($row->score) . '</strong></td>';
             $detailRows .= '<td>' . $row->correct_answers . '/' . $row->total_questions . '</td>';
             $detailRows .= '<td>' . $row->completed_at . '</td>';
             $detailRows .= '</tr>';
@@ -568,6 +581,8 @@ class ReportController extends Controller
             .stat-box { flex: 1; background: #f0f7ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px; text-align: center; }
             .stat-box .value { font-size: 18px; font-weight: bold; color: #1e40af; }
             .stat-box .label { font-size: 9px; color: #666; margin-top: 3px; }
+            .chart { text-align: center; margin: 15px 0; }
+            .chart img { max-width: 100%; }
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             th { background: #2563eb; color: #fff; padding: 8px 6px; text-align: left; font-size: 9px; }
             td { padding: 6px; border-bottom: 1px solid #e5e7eb; font-size: 9px; }
@@ -588,17 +603,80 @@ class ReportController extends Controller
                     <div class="stat-box"><div class="value">' . number_format($summary["min_score"], 1) . '</div><div class="label">Puntaje Mínimo</div></div>
                 </div>
             </div>
-            <div class="section-title">Desempeño por Área</div>
+            <div class="section-title">Promedio por Tipo de Evaluación</div>
+            <div class="chart"><img src="' . $chartImage . '" alt="Promedio por tipo de evaluación" /></div>
             <table>
-                <thead><tr><th>Área</th><th>Cantidad</th><th>Promedio</th></tr></thead>
-                <tbody>' . $areaRows . '</tbody>
+                <thead><tr><th>Tipo</th><th>Cantidad</th><th>Promedio</th></tr></thead>
+                <tbody>' . $typeRows . '</tbody>
+            </table>
+            <div class="section-title">Mejores Estudiantes</div>
+            <table>
+                <thead><tr><th>#</th><th>Estudiante</th><th>Evaluaciones</th><th>Promedio</th></tr></thead>
+                <tbody>' . $topRows . '</tbody>
             </table>
             <div class="section-title">Resultados Detallados</div>
             <table>
-                <thead><tr><th>Estudiante</th><th>Evaluación</th><th>Lección</th><th>Área</th><th>Puntaje</th><th>Correctas/Total</th><th>Fecha</th></tr></thead>
+                <thead><tr><th>Estudiante</th><th>Evaluación</th><th>Lección</th><th>Área</th><th>Puntaje</th><th>Calificación</th><th>Correctas/Total</th><th>Fecha</th></tr></thead>
                 <tbody>' . $detailRows . '</tbody>
             </table>
         </body></html>';
+    }
+
+    private function renderBarChartImage($data, $labelKey = 'type')
+    {
+        $labels = [];
+        $values = [];
+        foreach ($data as $item) {
+            $labels[] = $item[$labelKey] ?? 'N/A';
+            $values[] = (float) ($item['average'] ?? 0);
+        }
+
+        $width = 720;
+        $height = 280;
+        $padLeft = 60;
+        $padRight = 20;
+        $padTop = 30;
+        $padBottom = 55;
+
+        $img = imagecreatetruecolor($width, $height);
+        $white = imagecolorallocate($img, 255, 255, 255);
+        $blue = imagecolorallocate($img, 37, 99, 235);
+        $grid = imagecolorallocate($img, 229, 231, 235);
+        $text = imagecolorallocate($img, 60, 60, 60);
+        imagefilledrectangle($img, 0, 0, $width, $height, $white);
+
+        $chartW = $width - $padLeft - $padRight;
+        $chartH = $height - $padTop - $padBottom;
+        $n = count($values);
+        $maxVal = max(20, $values ? max($values) : 20);
+
+        for ($i = 0; $i <= 4; $i++) {
+            $y = $padTop + (int) ($chartH * $i / 4);
+            imageline($img, $padLeft, $y, $width - $padRight, $y, $grid);
+            $label = number_format($maxVal - ($maxVal * $i / 4), 0);
+            imagestring($img, 2, 8, $y - 5, $label, $text);
+        }
+
+        if ($n > 0) {
+            $gap = $chartW / $n;
+            $barW = $gap * 0.6;
+            foreach ($values as $i => $val) {
+                $barH = ($val / $maxVal) * $chartH;
+                $x1 = $padLeft + (int) ($i * $gap + ($gap - $barW) / 2);
+                $y1 = $padTop + (int) ($chartH - $barH);
+                imagefilledrectangle($img, $x1, $y1, $x1 + (int) $barW, $padTop + $chartH, $blue);
+                imagestring($img, 2, $x1, $y1 - 12, number_format($val, 1), $text);
+                $label = mb_substr((string) $labels[$i], 0, 14);
+                imagestring($img, 2, $x1, $padTop + $chartH + 10, $label, $text);
+            }
+        }
+
+        ob_start();
+        imagepng($img);
+        $png = ob_get_clean();
+        imagedestroy($img);
+
+        return 'data:image/png;base64,' . base64_encode($png);
     }
 
     private function buildStudentProgressHTML($studentData)
@@ -687,6 +765,7 @@ class ReportController extends Controller
             $detailRows .= '<td>' . htmlspecialchars($row->evaluation_title) . '</td>';
             $detailRows .= '<td>' . htmlspecialchars($row->area ?? 'N/A') . '</td>';
             $detailRows .= '<td>' . number_format($row->score, 1) . '</td>';
+            $detailRows .= '<td><strong>' . \App\Exports\GradesPDFExport::gradeLetter($row->score) . '</strong></td>';
             $detailRows .= '<td>' . $row->correct_answers . '/' . $row->total_questions . '</td>';
             $detailRows .= '<td>' . $row->completed_at . '</td>';
             $detailRows .= '</tr>';
@@ -724,7 +803,7 @@ class ReportController extends Controller
             </div>
             <div class="section-title">Detalle de Calificaciones</div>
             <table>
-                <thead><tr><th>Estudiante</th><th>Email</th><th>Evaluación</th><th>Área</th><th>Puntaje</th><th>Correctas/Total</th><th>Fecha</th></tr></thead>
+                <thead><tr><th>Estudiante</th><th>Email</th><th>Evaluación</th><th>Área</th><th>Puntaje</th><th>Calificación</th><th>Correctas/Total</th><th>Fecha</th></tr></thead>
                 <tbody>' . $detailRows . '</tbody>
             </table>
         </body></html>';

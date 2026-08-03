@@ -22,12 +22,13 @@ class GradesPDFExport
     {
         $query = DB::table('evaluation_results')
             ->join('evaluations', 'evaluation_results.evaluation_id', '=', 'evaluations.id')
-            ->join('users', 'evaluation_results.student_id', '=', 'users.id')
+            ->join('users', 'evaluation_results.user_id', '=', 'users.id')
             ->leftJoin('lessons', 'evaluations.lesson_id', '=', 'lessons.id')
             ->select(
                 'users.full_name as student_name',
                 'users.email as student_email',
                 'evaluations.title as evaluation_title',
+                'evaluations.type as evaluation_type',
                 'lessons.title as lesson_title',
                 'lessons.unit as area',
                 'evaluation_results.score',
@@ -41,7 +42,7 @@ class GradesPDFExport
         }
 
         if (!empty($this->filters['student_id'])) {
-            $query->where('evaluation_results.student_id', $this->filters['student_id']);
+            $query->where('evaluation_results.user_id', $this->filters['student_id']);
         }
 
         if (!empty($this->filters['evaluation_id'])) {
@@ -71,8 +72,31 @@ class GradesPDFExport
                     'average' => $items->avg('score'),
                 ];
             })->values(),
+            'by_type' => $data->groupBy('evaluation_type')->map(function ($items, $type) {
+                return [
+                    'type' => $type,
+                    'count' => $items->count(),
+                    'average' => $items->avg('score'),
+                ];
+            })->values(),
+            'top_students' => $data->groupBy('student_name')->map(function ($items, $name) {
+                return [
+                    'student_name' => $name,
+                    'count' => $items->count(),
+                    'average' => $items->avg('score'),
+                ];
+            })->sortByDesc('average')->take(5)->values(),
         ];
 
         return $summary;
+    }
+
+    public static function gradeLetter($score): string
+    {
+        $score = (float) $score;
+        if ($score >= 18) return 'AD';
+        if ($score >= 15) return 'A';
+        if ($score >= 12) return 'B';
+        return 'C';
     }
 }

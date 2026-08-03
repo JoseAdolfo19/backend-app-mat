@@ -174,4 +174,180 @@ EOT;
 
         return $response;
     }
+
+    /**
+     * Generar contenido de una lección con IA (docentes)
+     */
+    public function generateLesson(Request $request)
+    {
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'unit' => 'nullable|string|max:255',
+            'difficulty' => 'nullable|in:basic,intermediate,advanced',
+        ]);
+
+        if (empty(config('services.groq.key'))) {
+            return response()->json(['error' => 'AI service not configured.'], 500);
+        }
+
+        $user = $request->user();
+        $token = $user->currentAccessToken();
+
+        if ($token) {
+            $now = now();
+            if (!$token->daily_reset_at || $token->daily_reset_at->diffInHours($now) >= 24) {
+                $token->update(['daily_requests' => 0, 'daily_reset_at' => $now]);
+            }
+
+            if ($token->daily_requests >= self::DAILY_LIMIT) {
+                return response()->json([
+                    'error' => __('ai_daily_limit_reached'),
+                ], 429);
+            }
+
+            $token->increment('daily_requests');
+        }
+
+        $unitList = 'Aritmética, Álgebra, Geometría, Trigonometría';
+
+        $systemPrompt = <<<EOT
+Eres un asistente que crea lecciones de matemáticas para docentes de nivel escolar. Genera ÚNICAMENTE JSON válido, sin texto adicional fuera del objeto JSON.
+
+Debes devolver un objeto JSON con EXACTAMENTE estas claves:
+{
+  "title": "Título de la lección, claro y específico",
+  "unit": "Uno de estos cursos exactos: $unitList",
+  "topic": "Tema específico que se avanzará",
+  "description": "Descripción breve de 1 a 2 oraciones para el estudiante",
+  "content": "Contenido HTML de la lección usando <h2>, <p>, <ul> o <ol>, <strong> y <code> si aplica. Explica conceptos, incluye ejemplos resueltos paso a paso y ejercicios de práctica al final.",
+  "tags": ["entre 3 y 6 etiquetas cortas en español"]
+}
+
+Reglas:
+- Solo matemáticas; NUNCA incluyas razonamiento matemático de examen de admisión.
+- "unit" debe ser exactamente uno de: $unitList.
+- El contenido debe estar en español, ser pedagógico, apropiado al nivel escolar y ajustarse al tema solicitado.
+EOT;
+
+        $userPrompt = 'Título indicado por el docente: ' . $request->input('title');
+        if ($request->filled('unit')) {
+            $userPrompt .= "\nCurso (unit) indicado: " . $request->input('unit');
+        }
+        if ($request->filled('difficulty')) {
+            $difficultyLabels = ['basic' => 'básico', 'intermediate' => 'intermedio', 'advanced' => 'avanzado'];
+            $userPrompt .= "\nNivel de dificultad: " . $difficultyLabels[$request->input('difficulty')];
+        }
+
+        try {
+            $content = $this->callGroq([
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user', 'content' => $userPrompt],
+            ], 4096);
+        } catch (RuntimeException $e) {
+            return response()->json(['error' => $e->getMessage()], 502);
+        }
+
+        $data = $this->extractJson($content);
+
+        $data['title'] = $data['title'] ?? $request->input('title');
+        $data['unit'] = in_array($data['unit'] ?? null, ['Aritmética', 'Álgebra', 'Geometría', 'Trigonometría'])
+            ? $data['unit']
+            : ($request->input('unit') ?? null);
+        $data['topic'] = $data['topic'] ?? $data['title'];
+        $data['description'] = (string) ($data['description'] ?? '');
+        $data['content'] = (string) ($data['content'] ?? '');
+        $data['tags'] = array_values(array_slice((array) ($data['tags'] ?? []), 0, 8));
+
+        ActivityService::log('lesson_generated');
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
+        ]);
+    }
+
+    private function callGroq(array $messages, int $maxTokens = 2048): string
+    {
+        $apiKey = config('services.groq.key');
+
+        $attempts = [
+            ['type' => 'json_object'],
+            null,
+        ];
+
+        $lastError = null;
+
+        foreach ($attempts as $format) {
+            $payload = [
+                'model' => config('services.groq.model'),
+                'messages' => $messages,
+                'max_tokens' => $maxTokens,
+                'temperature' => 0.7,
+                'top_p' => 0.9,
+                'stream' => false,
+            ];
+
+            if ($format) {
+                $payload['response_format'] = $format;
+            }
+
+            $ch = curl_init(config('services.groq.url'));
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . $apiKey,
+                ],
+                CURLOPT_POSTFIELDS => json_encode($payload),
+                CURLOPT_TIMEOUT => 90,
+                CURLOPT_SSL_VERIFYPEER => true,
+            ]);
+
+            $raw = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($curlError) {
+                $lastError = new RuntimeException('AI service connection failed.', 502);
+                continue;
+            }
+
+            if ($httpCode !== 200) {
+                $decoded = json_decode($raw, true);
+                $lastError = new RuntimeException(
+                    $decoded['error']['message'] ?? 'AI service returned HTTP ' . $httpCode,
+                    502
+                );
+                continue;
+            }
+
+            $decoded = json_decode($raw, true);
+            $content = $decoded['choices'][0]['message']['content'] ?? '';
+
+            if (trim($content) !== '' && is_array($this->extractJson($content))) {
+                return $content;
+            }
+        }
+
+        throw $lastError ?? new RuntimeException('AI service returned an empty response.', 502);
+    }
+
+    private function extractJson(string $text): array
+    {
+        $decoded = json_decode($text, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+
+        if (preg_match('/\{.*\}/s', $text, $matches)) {
+            $decoded = json_decode($matches[0], true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return [];
+    }
 }

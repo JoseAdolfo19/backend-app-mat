@@ -12,9 +12,9 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 class GradesExport implements FromCollection, WithHeadings, WithMapping, WithStyles
 {
     private const HEADINGS = [
-        'es' => ['Estudiante', 'Evaluación', 'Lección', 'Área', 'Puntaje', 'Correctas/Total', 'Fecha'],
-        'en' => ['Student', 'Evaluation', 'Lesson', 'Area', 'Score', 'Correct/Total', 'Date'],
-        'qu' => ['Yachaykuna', 'Wanuchiy', 'Lección', 'Área', 'Puntaje', 'Chiqap tukuy', 'P\'unchay'],
+        'es' => ['Estudiante', 'Evaluación', 'Lección', 'Área', 'Puntaje', 'Calificación', 'Correctas/Total', 'Fecha'],
+        'en' => ['Student', 'Evaluation', 'Lesson', 'Area', 'Score', 'Grade', 'Correct/Total', 'Date'],
+        'qu' => ['Yachaykuna', 'Wanuchiy', 'Lección', 'Área', 'Puntaje', 'Yupay', 'Chiqap tukuy', 'P\'unchay'],
     ];
 
     private const STATUS = [
@@ -58,6 +58,7 @@ class GradesExport implements FromCollection, WithHeadings, WithMapping, WithSty
             $lessonTitle,
             $area,
             $score,
+            GradesPDFExport::gradeLetter($score),
             $correct . '/' . $total,
             is_string($date) ? $date : $date->format('d/m/Y H:i'),
         ];

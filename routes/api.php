@@ -66,6 +66,8 @@ Route::prefix('v1')->group(function () {
         // ============================================================
         Route::post('/ai/chat', [AiController::class, 'chat'])
             ->middleware('throttle:20,1');
+        Route::post('/ai/generate-lesson', [AiController::class, 'generateLesson'])
+            ->middleware(['role:teacher,admin', 'throttle:10,1']);
 
         // ============================================================
         // PERFIL DE USUARIO (Todos los roles)
@@ -182,11 +184,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/{id}/progress', [ProgressController::class, 'getLessonProgress'])
                 ->middleware('cache.api');
             Route::post('/{id}/progress', [ProgressController::class, 'updateLessonProgress'])
-                ->middleware('audit');
+                ->middleware(['role:student', 'audit']);
             
             Route::middleware(['role:teacher'])->group(function () {
                 Route::post('/', [LessonController::class, 'store'])
                     ->middleware('audit');
+                Route::post('/resources/upload', [LessonController::class, 'uploadResource'])
+                    ->middleware(['throttle:30,1', 'audit']);
                 Route::put('/{id}', [LessonController::class, 'update'])
                     ->middleware('audit');
                 Route::delete('/{id}', [LessonController::class, 'destroy'])
@@ -220,7 +224,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/{evaluationId}/questions', [EvaluationController::class, 'getQuestions'])
                 ->middleware('cache.api');
             Route::post('/{evaluationId}/submit', [EvaluationController::class, 'submit'])
-                ->middleware('audit');
+                ->middleware(['role:student', 'audit']);
             Route::get('/{evaluationId}/results', [EvaluationController::class, 'getResults'])
                 ->middleware('cache.api');
             
@@ -277,7 +281,8 @@ Route::prefix('v1')->group(function () {
                 ->middleware(['role:student', 'audit']);
             Route::post('/attempts/{attemptId}/submit', [ExamController::class, 'submitAttempt'])
                 ->middleware(['role:student', 'audit']);
-            Route::post('/attempts/{attemptId}/cheat', [ExamController::class, 'reportCheating']);
+            Route::post('/attempts/{attemptId}/cheat', [ExamController::class, 'reportCheating'])
+                ->middleware(['role:student']);
             Route::get('/{id}/stats', [ExamController::class, 'getExamStats'])
                 ->middleware(['role:teacher,admin', 'cache.api']);
         });

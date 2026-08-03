@@ -231,6 +231,67 @@ class LessonController extends Controller
     }
 
     /**
+     * Subir un recurso local (archivo del PC del docente)
+     */
+    public function uploadResource(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|max:102400',
+        ]);
+
+        $file = $request->file('file');
+        $extension = strtolower($file->getClientOriginalExtension());
+        $mime = strtolower($file->getClientMimeType());
+
+        $allowed = [
+            'pdf' => ['pdf'],
+            'image' => ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'],
+            'video' => ['mp4', 'webm', 'mov', 'avi'],
+            'audio' => ['mp3', 'wav', 'ogg', 'm4a'],
+        ];
+
+        $type = null;
+        foreach ($allowed as $candidateType => $extensions) {
+            if (in_array($extension, $extensions)) {
+                $type = $candidateType;
+                break;
+            }
+        }
+
+        if ($type === null) {
+            return response()->json([
+                'success' => false,
+                'message' => __('lesson_resource_type_invalid'),
+            ], 422);
+        }
+
+        $sizeLimits = [
+            'video' => 100 * 1024 * 1024,
+            'image' => 10 * 1024 * 1024,
+            'audio' => 20 * 1024 * 1024,
+            'pdf' => 20 * 1024 * 1024,
+        ];
+
+        if ($file->getSize() > $sizeLimits[$type]) {
+            return response()->json([
+                'success' => false,
+                'message' => __('lesson_resource_too_large'),
+            ], 422);
+        }
+
+        $name = Str::uuid() . '.' . $extension;
+        $file->storeAs('lesson-resources', $name, 'public');
+
+        return response()->json([
+            'success' => true,
+            'url' => $request->root() . '/storage/lesson-resources/' . $name,
+            'type' => $type,
+            'size' => $file->getSize(),
+            'original_name' => $file->getClientOriginalName(),
+        ], 201);
+    }
+
+    /**
      * Actualizar una lección existente
      */
     public function update(Request $request, $id)

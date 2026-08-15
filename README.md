@@ -189,7 +189,7 @@ backend-app-mat/
 | Archivo | Qué hace |
 |---------|----------|
 | `LoginRequest.php` | Valida `email` (requerido, formato) y `password` (requerido, min 8). Mensajes de error en español vía `__()`. |
-| `RegisterRequest.php` | Valida registro: `full_name`, `email` único, `password` confirmado (min 8), `role` (student/teacher), `academic_level` condicionado a estudiante, `department`/`specialization` condicionados a docente. |
+| `RegisterRequest.php` | Valida registro: `full_name`, `email` único, `password` confirmado (min 8), `role` (**solo student/parent** — docente y admin se crean vía panel/CLI), `academic_level` condicionado a estudiante. |
 
 ### `app/Models/` — 20 modelos Eloquent (UUID PK)
 
@@ -524,6 +524,32 @@ Todas las rutas autenticadas pasan por `auth:sanctum` + `auth.active` + `rate.li
 - **RBAC** con el middleware `role` aplicado por grupo de rutas.
 - **Anti-trampa** en exámenes: `time_taken` acotado, conteo de cambios de pestaña y `cheat_log`.
 - **Protección de secretos**: la API key de Groq y las credenciales de FCM/Google nunca salen del backend (proxy).
+
+---
+
+## Auditoría QA / Seguridad (2026-08)
+
+Auditoría realizada siguiendo el rol de **QA Engineer** (QA/security) sobre el backend. Hallazgos y correcciones aplicadas, en orden de severidad:
+
+| Severidad | Hallazgo | Archivo | Corrección |
+|-----------|----------|---------|------------|
+| **Critical** | El captcha devolvía el código en texto plano en el JSON → bypass total + enumeración de notas por DNI (datos de menores expuestos) | `GuestStudentController.php` | Captcha ahora devuelve **imagen SVG** + **token firmado** (`Crypt`) con expiración (5 min) e intentos máximos; `lookup` valida el token. |
+| **Critical** | Auto-registro permitía rol `teacher` → escalada de privilegios (acceso a lecciones, evaluaciones, notas) | `RegisterRequest.php` | Solo `student`/`parent` en auto-registro; docente/admin se crean vía panel/CLI. |
+| High | **IDOR** en `reportCheating`: un estudiante marcaba como "trampa" el intento de otro | `ExamController.php` | Verificación de propiedad (`attempt->student_id === Auth::id()`), 403 en caso contrario. |
+| High | Rol **parent** accedía a trabajos de todos los estudiantes (sin filtro por hijos) | `SubmittedWorkController.php` | `index`/`show`/`studentSummary` acotados a los hijos vinculados del parent. |
+| High | Reportes de docente no acotados → veía datos de toda la institución | `ReportController.php` | `filteredPerformanceReport`, `studentDetailReport` y `courseDetailReport` ahora se acotan por `teacher_id` vía helpers `teacherScoped*`. |
+| High | Respuestas correctas expuestas al rol **parent** | `ExamController.php`, `EvaluationController.php` | `correct_answer` oculto también para parent en `show`/`index`/`getQuestions`; `adaptive` restringido a estudiantes. |
+| Medium | CSV-injection sanitizada también en **import** (corrompía datos legítimos y el dedupe por email) | `AdminController.php` | La sanitización anti-fórmulas solo se aplica en **export**; el import ingresa los valores limpios. |
+| Medium | Password de BD en la línea de comandos de `mysqldump` (visible en `ps`) | `AdminController.php` | Password vía variable de entorno `MYSQL_PWD` en lugar de argumento. |
+| Medium | `childReport` usaba umbral 60 sobre escala 0-20 → `passed_evaluations`/`pass_rate` siempre 0 | `ParentController.php` | Umbral corregido a **12**. |
+| Medium | Rutas sensibles sin throttle | `routes/api.php` | Throttle en `student-lookup` (5/min), captcha (10/min), `submitted-works` (20/min), `auto-generate` (10/min), `users/import` (5/min) y `backup` (3/60 min). |
+| Medium | Rol `parent` inexistente en instalaciones frescas (migración de enum solo-MySQL) | `2014_10_12_000000_create_roles_table.php` | `parent` añadido al enum base (funciona en todos los drivers, incl. tests SQLite). |
+
+### Tests de regresión
+
+Nuevo `tests/Feature/SecurityFixesTest.php` (5 tests) que cubren: captcha sin código en claro, auto-registro sin rol teacher, IDOR en `reportCheating` (403), respuestas ocultas al parent, y rechazo de roles no permitidos.
+
+**Estado:** 71 tests ✓ (66 previos + 5 nuevos) · 442 aserciones. Ver también la auditoría del **frontend** en `README` de `frontend-app-mat`.
 
 ---
 

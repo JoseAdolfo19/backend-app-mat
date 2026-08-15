@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -40,11 +41,11 @@ class GuestStudentController extends Controller
 
         $sessionCaptcha = $decoded['code'];
         if (strtoupper($validated['captcha_answer']) !== strtoupper($sessionCaptcha)) {
-            $attempts = (int) session('captcha_attempts', 0) + 1;
-            session(['captcha_attempts' => $attempts]);
+            $key = 'captcha_attempts:' . $request->ip();
+            $attempts = (int) \Illuminate\Support\Facades\Cache::get($key, 0) + 1;
+            Cache::put($key, $attempts, now()->addMinutes(10));
             if ($attempts >= self::CAPTCHA_MAX_ATTEMPTS) {
-                session()->forget('captcha_attempts');
-                session()->forget('captcha_code');
+                Cache::forget($key);
                 return response()->json([
                     'success' => false,
                     'message' => 'Demasiados intentos. Solicite un nuevo captcha.',
@@ -56,8 +57,7 @@ class GuestStudentController extends Controller
             ], 422);
         }
 
-        session()->forget('captcha_attempts');
-        session()->forget('captcha_code');
+        Cache::forget('captcha_attempts:' . $request->ip());
 
         $student = User::where('dni', $validated['dni'])
             ->whereHas('role', fn ($q) => $q->where('name', 'student'))
@@ -143,7 +143,6 @@ class GuestStudentController extends Controller
         }
 
         $expiresAt = time() + self::CAPTCHA_TTL_SECONDS;
-        session(['captcha_code' => $captcha, 'captcha_attempts' => 0]);
         $token = Crypt::encryptString(json_encode([
             'code' => $captcha,
             'expires_at' => $expiresAt,

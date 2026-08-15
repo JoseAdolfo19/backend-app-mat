@@ -100,71 +100,49 @@ EOT;
             'stream' => true,
         ]);
 
-        $ch = curl_init(config('services.groq.url'));
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_RETURNTRANSFER => false,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'Authorization: Bearer ' . $apiKey,
-            ],
-            CURLOPT_POSTFIELDS => $payload,
-            CURLOPT_TIMEOUT => 60,
-            CURLOPT_SSL_VERIFYPEER => true,
-        ]);
-
-        $stream = fopen('php://temp', 'r+');
-
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $chunk) use ($stream) {
-            fwrite($stream, $chunk);
-            return strlen($chunk);
-        });
-
-        curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        if ($curlError) {
-            return response()->json(['error' => 'AI service connection failed.'], 502);
-        }
-
-        if ($httpCode !== 200) {
-            rewind($stream);
-            $body = stream_get_contents($stream);
-            fclose($stream);
-            $decoded = json_decode($body, true);
-            $msg = $decoded['error']['message'] ?? 'AI service returned HTTP ' . $httpCode;
-            return response()->json(['error' => $msg], 502);
-        }
-
-        rewind($stream);
-        $rawResponse = stream_get_contents($stream);
-        fclose($stream);
-
         ActivityService::log('chat_used');
 
         $response = new Response(null, 200, [
             'Content-Type' => 'text/event-stream',
             'Cache-Control' => 'no-cache',
             'X-Accel-Buffering' => 'no',
+            'Connection' => 'keep-alive',
         ]);
 
-        $response->setCallback(function () use ($rawResponse) {
-            $lines = explode("\n", $rawResponse);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if ($line === '' || $line === 'data: [DONE]') {
-                    continue;
-                }
-                if (str_starts_with($line, 'data: ')) {
+        // Streaming en tiempo real: cada chunk que llega de Groq se reenvía al
+        // cliente como SSE conforme se recibe, sin esperar a que termine.
+        $response->setCallback(function () use ($apiKey, $payload) {
+            $ch = curl_init(config('services.groq.url'));
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_RETURNTRANSFER => false,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . $apiKey,
+                ],
+                CURLOPT_POSTFIELDS => $payload,
+                CURLOPT_TIMEOUT => 60,
+                CURLOPT_SSL_VERIFYPEER => true,
+            ]);
+
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $chunk) {
+                foreach (explode("\n", $chunk) as $line) {
+                    $line = trim($line);
+                    if ($line === '') {
+                        continue;
+                    }
                     echo $line . "\n\n";
                     if (ob_get_level() > 0) {
                         ob_flush();
                     }
                     flush();
                 }
-            }
+                return strlen($chunk);
+            });
+
+            curl_exec($ch);
+            curl_close($ch);
+
             echo "data: [DONE]\n\n";
             if (ob_get_level() > 0) {
                 ob_flush();

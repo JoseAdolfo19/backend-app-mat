@@ -268,56 +268,6 @@ class SubmittedWorkController extends Controller
     }
 
     /**
-     * Ranking by course/area.
-     */
-    public function courseRanking(Request $request)
-    {
-        $request->validate([
-            'unit' => 'required|string',
-        ]);
-
-        $unit = $request->unit;
-
-        $evalScores = EvaluationResult::where('status', 'completed')
-            ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $unit))
-            ->select('user_id', DB::raw('AVG(score) as avg_score'), DB::raw('COUNT(*) as total_works'))
-            ->groupBy('user_id');
-
-        $workScores = SubmittedWork::where('status', 'graded')
-            ->whereHas('lesson', fn ($q) => $q->where('unit', $unit))
-            ->select('student_id as user_id', DB::raw('AVG(score) as avg_score'), DB::raw('COUNT(*) as total_works'))
-            ->groupBy('student_id');
-
-        $combined = DB::table($evalScores->union($workScores)->toRawSql())
-            ->select('user_id', DB::raw('AVG(avg_score) as average_score'), DB::raw('SUM(total_works) as total_works'))
-            ->groupBy('user_id')
-            ->orderBy('average_score', 'desc')
-            ->get();
-
-        $ranked = $combined->values()->map(function ($item, $index) use ($unit) {
-            $user = \App\Models\User::find($item->user_id);
-            return [
-                'position' => $index + 1,
-                'student_name' => $user?->full_name ?? 'Unknown',
-                'student_id' => $item->user_id,
-                'average_score' => round($item->average_score, 2),
-                'total_works' => $item->total_works,
-            ];
-        });
-
-        $myPosition = null;
-        if (Auth::user()->isStudent()) {
-            $myEntry = $ranked->firstWhere('student_id', Auth::id());
-            $myPosition = $myEntry ? $myEntry['position'] : null;
-        }
-
-        return response()->json([
-            'data' => $ranked,
-            'my_position' => $myPosition,
-        ]);
-    }
-
-    /**
      * Auto-generate submitted_works from completed lesson_progress and evaluation_results.
      */
     public function autoGenerateFromCompleted(Request $request)
@@ -348,11 +298,10 @@ class SubmittedWorkController extends Controller
                     'lesson_id' => $lp->lesson_id,
                     'work_type' => 'lesson',
                     'title' => $lesson?->title ?? 'Lesson Work',
-                    'status' => 'graded',
-                    'score' => rand(10, 20),
+                    'status' => 'submitted',
+                    'score' => null,
                     'max_score' => 20,
                     'submitted_at' => $lp->completed_at,
-                    'graded_at' => $lp->completed_at,
                 ]);
                 $created++;
             }

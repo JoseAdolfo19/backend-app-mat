@@ -293,7 +293,7 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/submitted-works', [SubmittedWorkController::class, 'index']);
         Route::post('/submitted-works', [SubmittedWorkController::class, 'store'])
-            ->middleware('throttle:20,1');
+            ->middleware(['role:student', 'throttle:20,1']);
         Route::get('/submitted-works/student/summary', [SubmittedWorkController::class, 'studentSummary']);
         Route::get('/submitted-works/{id}', [SubmittedWorkController::class, 'show']);
         Route::post('/submitted-works/{id}/grade', [SubmittedWorkController::class, 'grade'])

@@ -118,8 +118,10 @@ class EvaluationController extends Controller
                 $evaluation->already_completed = true;
                 $evaluation->result = $result;
             }
+        }
 
-            // Ocultar respuestas correctas
+        // Ocultar respuestas correctas a estudiantes y padres
+        if (Auth::user()->isStudent() || Auth::user()->isParent()) {
             foreach ($evaluation->questions as $question) {
                 $question->makeHidden(['correct_answer']);
             }
@@ -389,8 +391,8 @@ class EvaluationController extends Controller
             ->orderBy('order', 'asc')
             ->get();
 
-        // Si es estudiante, ocultar respuestas correctas
-        if (Auth::user()->isStudent()) {
+        // Si es estudiante o padre, ocultar respuestas correctas
+        if (Auth::user()->isStudent() || Auth::user()->isParent()) {
             $questions->makeHidden(['correct_answer']);
         }
 
@@ -842,6 +844,13 @@ class EvaluationController extends Controller
     public function adaptive(Request $request)
     {
         $user = Auth::user();
+
+        if (!$user->isStudent()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('evaluation_not_available')
+            ], 403);
+        }
 
         $recentResults = EvaluationResult::where('user_id', $user->id)
             ->where('status', 'completed')

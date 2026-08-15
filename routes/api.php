@@ -292,7 +292,8 @@ Route::prefix('v1')->group(function () {
         // ============================================================
 
         Route::get('/submitted-works', [SubmittedWorkController::class, 'index']);
-        Route::post('/submitted-works', [SubmittedWorkController::class, 'store']);
+        Route::post('/submitted-works', [SubmittedWorkController::class, 'store'])
+            ->middleware('throttle:20,1');
         Route::get('/submitted-works/student/summary', [SubmittedWorkController::class, 'studentSummary']);
         Route::get('/submitted-works/{id}', [SubmittedWorkController::class, 'show']);
         Route::post('/submitted-works/{id}/grade', [SubmittedWorkController::class, 'grade'])
@@ -300,7 +301,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/submitted-works/{id}/return', [SubmittedWorkController::class, 'returnWork'])
             ->middleware('role:teacher,admin');
         Route::post('/submitted-works/auto-generate', [SubmittedWorkController::class, 'autoGenerateFromCompleted'])
-            ->middleware('role:teacher,admin');
+            ->middleware(['role:teacher,admin', 'throttle:10,1']);
 
         // ============================================================
         // RANKINGS
@@ -379,7 +380,7 @@ Route::prefix('v1')->group(function () {
                 Route::post('/{id}/deactivate', [AdminController::class, 'deactivateUser'])
                     ->middleware('audit');
                 Route::post('/import', [AdminController::class, 'importUsers'])
-                    ->middleware('audit');
+                    ->middleware(['audit', 'throttle:5,1']);
                 Route::get('/export', [AdminController::class, 'exportUsers']);
             });
             
@@ -403,7 +404,7 @@ Route::prefix('v1')->group(function () {
             
             Route::prefix('backup')->group(function () {
                 Route::post('/', [AdminController::class, 'createBackup'])
-                    ->middleware('audit');
+                    ->middleware(['audit', 'throttle:3,60']);
                 Route::get('/last', [AdminController::class, 'getLastBackup'])
                     ->middleware('cache.api');
                 Route::get('/download/{filename}', [AdminController::class, 'downloadBackup']);
@@ -415,8 +416,8 @@ Route::prefix('v1')->group(function () {
     // GUEST STUDENT LOOKUP (Público)
     // ============================================================
 
-    Route::post('/guest/student-lookup', [GuestStudentController::class, 'lookup']);
-    Route::get('/guest/captcha', [GuestStudentController::class, 'generateCaptcha']);
+    Route::post('/guest/student-lookup', [GuestStudentController::class, 'lookup'])->middleware('throttle:5,1');
+    Route::get('/guest/captcha', [GuestStudentController::class, 'generateCaptcha'])->middleware('throttle:10,1');
 
     // ============================================================
     // RUTAS PÚBLICAS (Sin autenticación)

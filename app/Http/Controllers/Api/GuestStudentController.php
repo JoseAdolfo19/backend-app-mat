@@ -6,11 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class GuestStudentController extends Controller
 {
+    private const CAPTCHA_TTL_SECONDS = 300;
+    private const CAPTCHA_MAX_ATTEMPTS = 5;
+
     public function lookup(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -19,13 +23,41 @@ class GuestStudentController extends Controller
             'captcha_answer' => 'required|string',
         ]);
 
-        $sessionCaptcha = session('captcha_code');
-        if (!$sessionCaptcha || strtoupper($validated['captcha_answer']) !== strtoupper($sessionCaptcha)) {
+        $decoded = $this->decodeCaptchaToken($validated['captcha_token']);
+        if (!$decoded) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Captcha inválido o expirado. Intente nuevamente.',
+            ], 422);
+        }
+
+        if (time() > $decoded['expires_at']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Captcha expirado. Intente nuevamente.',
+            ], 422);
+        }
+
+        $sessionCaptcha = $decoded['code'];
+        if (strtoupper($validated['captcha_answer']) !== strtoupper($sessionCaptcha)) {
+            $attempts = (int) session('captcha_attempts', 0) + 1;
+            session(['captcha_attempts' => $attempts]);
+            if ($attempts >= self::CAPTCHA_MAX_ATTEMPTS) {
+                session()->forget('captcha_attempts');
+                session()->forget('captcha_code');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Demasiados intentos. Solicite un nuevo captcha.',
+                ], 429);
+            }
             return response()->json([
                 'success' => false,
                 'message' => 'Captcha inválido. Intente nuevamente.',
             ], 422);
         }
+
+        session()->forget('captcha_attempts');
+        session()->forget('captcha_code');
 
         $student = User::where('dni', $validated['dni'])
             ->whereHas('role', fn ($q) => $q->where('name', 'student'))
@@ -110,12 +142,80 @@ class GuestStudentController extends Controller
             $captcha .= $chars[random_int(0, strlen($chars) - 1)];
         }
 
-        session(['captcha_code' => $captcha]);
+        $expiresAt = time() + self::CAPTCHA_TTL_SECONDS;
+        session(['captcha_code' => $captcha, 'captcha_attempts' => 0]);
+        $token = Crypt::encryptString(json_encode([
+            'code' => $captcha,
+            'expires_at' => $expiresAt,
+        ]));
 
         return response()->json([
             'success' => true,
-            'captcha_code' => $captcha,
+            'captcha_token' => $token,
+            'captcha_image' => $this->renderSvg($captcha),
             'captcha_image_url' => null,
+            'expires_in' => self::CAPTCHA_TTL_SECONDS,
         ]);
+    }
+
+    private function decodeCaptchaToken(?string $token): ?array
+    {
+        if (!$token) {
+            return null;
+        }
+        try {
+            $payload = json_decode(Crypt::decryptString($token), true);
+        } catch (\Throwable $e) {
+            return null;
+        }
+        if (!is_array($payload) || empty($payload['code']) || empty($payload['expires_at'])) {
+            return null;
+        }
+        return $payload;
+    }
+
+    private function renderSvg(string $code): string
+    {
+        $width = 160;
+        $height = 50;
+        $lines = [];
+        $text = '';
+
+        for ($i = 0; $i < 5; $i++) {
+            $lines[] = sprintf(
+                '<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#cbd5e1" stroke-width="1.5"/>',
+                random_int(5, $width - 5),
+                random_int(5, $height),
+                random_int(5, $width - 5),
+                random_int(5, $height)
+            );
+        }
+
+        foreach (str_split($code) as $i => $char) {
+            $x = 18 + ($i * 24);
+            $y = random_int(30, 38);
+            $rot = random_int(-18, 18);
+            $text .= sprintf(
+                '<text x="%d" y="%d" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1e293b" transform="rotate(%d %d %d)">%s</text>',
+                $x,
+                $y,
+                $rot,
+                $x,
+                $y,
+                htmlspecialchars($char, ENT_QUOTES, 'UTF-8')
+            );
+        }
+
+        $svg = sprintf(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" role="img" aria-label="captcha">%s%s</svg>',
+            $width,
+            $height,
+            $width,
+            $height,
+            implode('', $lines),
+            $text
+        );
+
+        return 'data:image/svg+xml;base64,' . base64_encode($svg);
     }
 }

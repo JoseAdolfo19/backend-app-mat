@@ -337,6 +337,16 @@ class ReportController extends Controller
         $workQuery = SubmittedWork::with(['student', 'lesson', 'evaluation'])
             ->where('status', 'graded');
 
+        if (Auth::user()->isTeacher()) {
+            $teacherEvalIds = $this->teacherScopedEvaluationIds();
+            $teacherLessonIds = $this->teacherScopedLessonIds();
+            $evalQuery->whereIn('evaluation_id', $teacherEvalIds);
+            $workQuery->where(function ($q) use ($teacherLessonIds) {
+                $q->whereIn('lesson_id', $teacherLessonIds)
+                  ->orWhereIn('evaluation_id', $this->teacherScopedEvaluationIds());
+            });
+        }
+
         if ($request->filled('student_id')) {
             $evalQuery->where('user_id', $request->student_id);
             $workQuery->where('student_id', $request->student_id);
@@ -404,21 +414,26 @@ class ReportController extends Controller
     {
         $student = \App\Models\User::findOrFail($studentId);
 
+        $teacherEvalIds = $this->teacherScopedEvaluationIds();
+        $teacherLessonIds = $this->teacherScopedLessonIds();
+
         $areas = ['Álgebra', 'Geometría', 'Trigonometría'];
         $courses = [];
 
         foreach ($areas as $area) {
             $evalResults = EvaluationResult::where('user_id', $studentId)
                 ->where('status', 'completed')
+                ->when($teacherEvalIds, fn ($q) => $q->whereIn('evaluation_id', $teacherEvalIds))
                 ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $area))
                 ->get();
 
             $works = SubmittedWork::where('student_id', $studentId)
                 ->where('status', 'graded')
-                ->where(function ($q) use ($area) {
+                ->where(function ($q) use ($area, $teacherLessonIds, $teacherEvalIds) {
                     $q->whereHas('lesson', fn ($lq) => $lq->where('unit', $area))
                       ->orWhereHas('evaluation.lesson', fn ($lq) => $lq->where('unit', $area));
                 })
+                ->when($teacherLessonIds, fn ($q) => $q->whereIn('lesson_id', $teacherLessonIds))
                 ->get();
 
             if ($evalResults->isEmpty() && $works->isEmpty()) {
@@ -466,33 +481,41 @@ class ReportController extends Controller
      */
     public function courseDetailReport(Request $request, $unit)
     {
+        $teacherEvalIds = $this->teacherScopedEvaluationIds();
+        $teacherLessonIds = $this->teacherScopedLessonIds();
+
         $students = DB::table('evaluation_results')
             ->where('status', 'completed')
+            ->when($teacherEvalIds, fn ($q) => $q->whereIn('evaluation_id', $teacherEvalIds))
             ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $unit))
             ->select('user_id')
             ->groupBy('user_id')
             ->pluck('user_id')
             ->merge(
                 SubmittedWork::where('status', 'graded')
+                    ->when($teacherLessonIds, fn ($q) => $q->whereIn('lesson_id', $teacherLessonIds))
                     ->whereHas('lesson', fn ($q) => $q->where('unit', $unit))
                     ->pluck('student_id')
             )
             ->unique();
 
-        $studentData = $students->map(function ($studentId) use ($unit) {
+        $studentData = $students->map(function ($studentId) use ($unit, $teacherEvalIds, $teacherLessonIds) {
             $user = \App\Models\User::find($studentId);
             $evalAvg = EvaluationResult::where('user_id', $studentId)
                 ->where('status', 'completed')
+                ->when($teacherEvalIds, fn ($q) => $q->whereIn('evaluation_id', $teacherEvalIds))
                 ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $unit))
                 ->avg('score');
 
             $worksCount = SubmittedWork::where('student_id', $studentId)
                 ->where('status', 'graded')
+                ->when($teacherLessonIds, fn ($q) => $q->whereIn('lesson_id', $teacherLessonIds))
                 ->whereHas('lesson', fn ($q) => $q->where('unit', $unit))
                 ->count();
 
             $workAvg = SubmittedWork::where('student_id', $studentId)
                 ->where('status', 'graded')
+                ->when($teacherLessonIds, fn ($q) => $q->whereIn('lesson_id', $teacherLessonIds))
                 ->whereHas('lesson', fn ($q) => $q->where('unit', $unit))
                 ->avg('score');
 
@@ -505,6 +528,7 @@ class ReportController extends Controller
                 'average' => $average,
                 'evaluations_count' => EvaluationResult::where('user_id', $studentId)
                     ->where('status', 'completed')
+                    ->when($teacherEvalIds, fn ($q) => $q->whereIn('evaluation_id', $teacherEvalIds))
                     ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $unit))
                     ->count(),
                 'submitted_works_count' => $worksCount,
@@ -857,6 +881,22 @@ class ReportController extends Controller
      * Construye el query base de calificaciones, aplicando los mismos filtros
      * que gradesReport/exportPDF/exportExcel usan en común (evita duplicar lógica).
      */
+    private function teacherScopedEvaluationIds(): array
+    {
+        if (!Auth::user()->isTeacher()) {
+            return [];
+        }
+        return Evaluation::where('teacher_id', Auth::id())->pluck('id')->all();
+    }
+
+    private function teacherScopedLessonIds(): array
+    {
+        if (!Auth::user()->isTeacher()) {
+            return [];
+        }
+        return \App\Models\Lesson::where('teacher_id', Auth::id())->pluck('id')->all();
+    }
+
     private function buildGradesQuery(Request $request)
     {
         $query = EvaluationResult::with(['user', 'evaluation'])

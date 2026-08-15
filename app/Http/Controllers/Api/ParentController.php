@@ -96,7 +96,7 @@ class ParentController extends Controller
             ->get();
 
         $totalEvaluations = $evaluationResults->count();
-        $passedEvaluations = $evaluationResults->where('score', '>=', 60)->count();
+        $passedEvaluations = $evaluationResults->where('score', '>=', 12)->count();
         $averageScore = $evaluationResults->avg('score');
         $highestScore = $evaluationResults->max('score');
         $lowestScore = $evaluationResults->min('score');

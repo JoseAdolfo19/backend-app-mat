@@ -404,9 +404,6 @@ class AdminController extends Controller
                 continue;
             }
 
-            $fullName = $this->sanitizeCsvValue($fullName);
-            $email = $this->sanitizeCsvValue($email);
-
             if (User::where('email', $email)->exists()) {
                 $errors[] = __('import_row_email_exists', ['row' => $rowNum, 'email' => $email]);
                 continue;
@@ -502,16 +499,21 @@ class AdminController extends Controller
         $password = $dbConfig['password'];
 
         $cmd = sprintf(
-            'mysqldump --host=%s --port=%s --user=%s --password=%s %s > %s 2>&1',
+            'mysqldump --host=%s --port=%s --user=%s %s > %s 2>&1',
             escapeshellarg($host),
             escapeshellarg($port),
             escapeshellarg($username),
-            escapeshellarg($password),
             escapeshellarg($database),
             escapeshellarg($backupPath . '/' . $filename)
         );
 
-        exec($cmd, $output, $returnCode);
+        $env = array_merge($_ENV ?? [], [
+            'MYSQL_PWD' => $password,
+        ]);
+
+        $output = [];
+        $returnCode = 0;
+        exec($cmd, $output, $returnCode, $env);
 
         if ($returnCode !== 0) {
             report('Backup failed: ' . implode("\n", $output));

@@ -25,6 +25,8 @@ class ExamController extends Controller
             }
         } elseif (Auth::user()->isStudent()) {
             $query->where('is_active', true);
+        } elseif (Auth::user()->isParent()) {
+            $query->where('is_active', true);
         }
 
         if ($request->has('is_active') && $request->is_active !== null) {
@@ -47,12 +49,17 @@ class ExamController extends Controller
             });
         }
 
-        if (Auth::user()->isStudent()) {
+        if (Auth::user()->isStudent() || Auth::user()->isParent()) {
             foreach ($query->get() as $exam) {
-                $attempt = ExamAttempt::where('student_id', Auth::id())
-                    ->where('exam_id', $exam->id)
-                    ->first();
-                $exam->user_attempt = $attempt;
+                foreach ($exam->questions as $question) {
+                    $question->makeHidden(['correct_answer']);
+                }
+                if (Auth::user()->isStudent()) {
+                    $attempt = ExamAttempt::where('student_id', Auth::id())
+                        ->where('exam_id', $exam->id)
+                        ->first();
+                    $exam->user_attempt = $attempt;
+                }
             }
         }
 
@@ -161,19 +168,20 @@ class ExamController extends Controller
     {
         $exam = Exam::with(['teacher', 'questions'])->findOrFail($id);
 
-        if (Auth::user()->isStudent()) {
-            if (!$exam->is_active) {
+        if (Auth::user()->isStudent() || Auth::user()->isParent()) {
+            if (!$exam->is_active && Auth::user()->isStudent()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Examen no disponible'
                 ], 403);
             }
 
-            $attempt = ExamAttempt::where('student_id', Auth::id())
-                ->where('exam_id', $id)
-                ->first();
-
-            $exam->user_attempt = $attempt;
+            if (Auth::user()->isStudent()) {
+                $attempt = ExamAttempt::where('student_id', Auth::id())
+                    ->where('exam_id', $id)
+                    ->first();
+                $exam->user_attempt = $attempt;
+            }
 
             foreach ($exam->questions as $question) {
                 $question->makeHidden(['correct_answer']);
@@ -561,6 +569,13 @@ class ExamController extends Controller
     public function reportCheating(Request $request, $attemptId)
     {
         $attempt = ExamAttempt::findOrFail($attemptId);
+
+        if ((string) $attempt->student_id !== (string) $request->user()->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permiso para realizar esta acción.',
+            ], 403);
+        }
 
         $validated = $request->validate([
             'event' => 'required|string|in:tab_switch,window_blur,copy_attempt,paste_attempt,fullscreen_exit,screenshot_attempt',

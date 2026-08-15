@@ -35,6 +35,9 @@ class SubmittedWorkController extends Controller
                   ->orWhereIn('lesson_id', $teacherLessonIds)
                   ->orWhereIn('exam_id', $teacherExamIds);
             });
+        } elseif ($user->isParent()) {
+            $childIds = $user->children()->pluck('users.id');
+            $query->whereIn('student_id', $childIds);
         }
 
         if ($request->filled('student_id')) {
@@ -153,6 +156,9 @@ class SubmittedWorkController extends Controller
         if ($user->isStudent() && $work->student_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
+        if ($user->isParent() && !$user->children()->whereKey($work->student_id)->exists()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
         return response()->json(['data' => $work]);
     }
@@ -204,7 +210,17 @@ class SubmittedWorkController extends Controller
     public function studentSummary(Request $request)
     {
         $user = Auth::user();
-        $studentId = $user->isStudent() ? $user->id : ($request->student_id ?? $user->id);
+        if ($user->isParent()) {
+            $childIds = $user->children()->pluck('users.id');
+            $studentId = $request->student_id ?? null;
+            if (!$studentId || !in_array($studentId, $childIds->all(), true)) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+        } elseif ($user->isTeacher()) {
+            $studentId = $request->student_id ?? $user->id;
+        } else {
+            $studentId = $user->isStudent() ? $user->id : ($request->student_id ?? $user->id);
+        }
 
         $totalWorks = SubmittedWork::where('student_id', $studentId)->count();
         $submitted = SubmittedWork::where('student_id', $studentId)->where('status', 'submitted')->count();

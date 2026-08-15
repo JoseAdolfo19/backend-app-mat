@@ -1,0 +1,137 @@
+<?php
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\User;
+use App\Models\Role;
+use App\Models\Exam;
+use App\Models\ExamAttempt;
+use App\Models\ExamQuestion;
+use App\Models\Evaluation;
+use App\Models\EvaluationQuestion;
+use Illuminate\Support\Str;
+use Laravel\Sanctum\Sanctum;
+
+class SecurityFixesTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private string $baseUrl = '/api/v1';
+
+    private function createUser(string $roleName, array $overrides = []): User
+    {
+        $role = Role::firstOrCreate(['name' => $roleName]);
+        return User::create(array_merge([
+            'id' => Str::uuid(),
+            'email' => $roleName . '_' . Str::random(6) . '@example.com',
+            'full_name' => ucfirst($roleName) . ' User',
+            'password' => 'password123',
+            'role_id' => $role->id,
+            'is_active' => true,
+            'provider' => 'email',
+        ], $overrides));
+    }
+
+    public function test_captcha_does_not_return_plaintext_code(): void
+    {
+        $response = $this->getJson("{$this->baseUrl}/guest/captcha");
+
+        $response->assertOk()
+            ->assertJsonMissing(['captcha_code'])
+            ->assertJsonStructure(['captcha_token', 'captcha_image']);
+    }
+
+    public function test_cannot_self_register_as_teacher(): void
+    {
+        $response = $this->postJson("{$this->baseUrl}/auth/register", [
+            'full_name' => 'Evil Teacher',
+            'email' => 'evil_teacher@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'role' => 'teacher',
+            'department' => 'Math',
+            'specialization' => 'Algebra',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertDatabaseMissing('users', ['email' => 'evil_teacher@example.com']);
+    }
+
+    public function test_student_cannot_report_cheating_on_others_attempt(): void
+    {
+        $studentA = $this->createUser('student');
+        $studentB = $this->createUser('student');
+        $teacher = $this->createUser('teacher');
+
+        $exam = Exam::create([
+            'id' => Str::uuid(),
+            'teacher_id' => $teacher->id,
+            'title' => 'Math Exam',
+            'is_active' => true,
+            'duration_minutes' => 30,
+        ]);
+
+        $attempt = ExamAttempt::create([
+            'id' => Str::uuid(),
+            'exam_id' => $exam->id,
+            'student_id' => $studentB->id,
+            'status' => 'in_progress',
+            'tab_switch_count' => 0,
+            'cheat_log' => [],
+        ]);
+
+        Sanctum::actingAs($studentA, ['student']);
+
+        $response = $this->postJson("{$this->baseUrl}/exams/attempts/{$attempt->id}/cheat", [
+            'event' => 'tab_switch',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_parent_cannot_see_correct_answers_in_exam(): void
+    {
+        $parent = $this->createUser('parent');
+        $teacher = $this->createUser('teacher');
+
+        $exam = Exam::create([
+            'id' => Str::uuid(),
+            'teacher_id' => $teacher->id,
+            'title' => 'Secret Exam',
+            'is_active' => true,
+            'duration_minutes' => 30,
+        ]);
+
+        ExamQuestion::create([
+            'id' => Str::uuid(),
+            'exam_id' => $exam->id,
+            'type' => 'multiple_choice',
+            'question_text' => 'What is 2+2?',
+            'options' => ['3', '4', '5'],
+            'correct_answer' => '4',
+            'order' => 1,
+        ]);
+
+        Sanctum::actingAs($parent, ['parent']);
+
+        $response = $this->getJson("{$this->baseUrl}/exams/{$exam->id}");
+
+        $response->assertOk()
+            ->assertJsonMissing(['correct_answer']);
+    }
+
+    public function test_self_registration_only_allows_student_or_parent(): void
+    {
+        $response = $this->postJson("{$this->baseUrl}/auth/register", [
+            'full_name' => 'Bad Role',
+            'email' => 'bad_role@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'role' => 'admin',
+        ]);
+
+        $response->assertStatus(422);
+    }
+}

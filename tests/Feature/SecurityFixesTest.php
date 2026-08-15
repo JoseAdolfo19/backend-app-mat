@@ -134,4 +134,22 @@ class SecurityFixesTest extends TestCase
 
         $response->assertStatus(422);
     }
+
+    public function test_cache_response_middleware_returns_304_without_crashing(): void
+    {
+        $student = $this->createUser('student');
+
+        // primera petición devuelve 200 con ETag
+        $response = $this->actingAs($student)->getJson("{$this->baseUrl}/user/profile");
+        $response->assertOk();
+        $etag = $response->headers->get('ETag');
+        $this->assertNotEmpty($etag, 'La respuesta debe incluir un ETag.');
+
+        // segunda petición con el mismo If-None-Match devuelve 304 (sin lanzar
+        // "ResponseFactory::setNotModified does not exist")
+        $response2 = $this->actingAs($student)->getJson("{$this->baseUrl}/user/profile", [
+            'If-None-Match' => $etag,
+        ]);
+        $response2->assertStatus(304);
+    }
 }

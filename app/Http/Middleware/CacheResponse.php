@@ -21,7 +21,7 @@ class CacheResponse
             $response->headers->set('Last-Modified', gmdate('D, d M Y H:i:s', time()) . ' GMT');
 
             if ($request->headers->get('If-None-Match') === $etag) {
-                return response()->setNotModified();
+                return $response->setStatusCode(304);
             }
         }
 

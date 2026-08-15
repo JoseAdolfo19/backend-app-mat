@@ -464,11 +464,11 @@ class AdminController extends Controller
             foreach ($users as $user) {
                 fputcsv($handle, [
                     $user->id,
-                    $user->full_name,
-                    $user->email,
-                    $user->role->name ?? '',
+                    $this->sanitizeCsvValue($user->full_name),
+                    $this->sanitizeCsvValue($user->email),
+                    $this->sanitizeCsvValue($user->role->name ?? ''),
                     $user->is_active ? __('csv_yes') : __('csv_no'),
-                    $user->institution ?? '',
+                    $this->sanitizeCsvValue($user->institution ?? ''),
                     $user->created_at->format('Y-m-d')
                 ]);
             }

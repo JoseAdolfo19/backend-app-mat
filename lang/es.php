@@ -148,6 +148,28 @@ return [
     'device_registered' => 'Dispositivo registrado para notificaciones',
     'device_unregistered' => 'Dispositivo desregistrado',
 
+    // Calendar
+    'event_created' => 'Evento creado exitosamente',
+    'event_updated' => 'Evento actualizado',
+    'event_deleted' => 'Evento eliminado',
+    'event_not_found' => 'Evento no encontrado',
+
+    // Web Push
+    'push_subscribed' => 'Suscripción a notificaciones activada',
+    'push_unsubscribed' => 'Suscripción a notificaciones desactivada',
+    'push_test_title' => 'MathFlow Test',
+    'push_test_body' => '¡Tus notificaciones push están funcionando!',
+    'push_test_sent' => 'Notificación de prueba enviada',
+
+    // Translations
+    'translation_saved' => 'Traducción guardada',
+    'translations_saved' => 'Traducciones guardadas',
+    'translation_deleted' => 'Traducción eliminada',
+    'translation_not_found' => 'Traducción no encontrada',
+
+    // Gamification
+    'achievements_synced' => 'Logros sincronizados',
+
     // Progress
     'progress_updated' => 'Progreso actualizado exitosamente',
 

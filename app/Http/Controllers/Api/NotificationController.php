@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
 use App\Services\PushNotificationService;
+use App\Services\WebPushService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -150,6 +151,18 @@ class NotificationController extends Controller
             report($e);
         }
 
+        // Enviar web push (navegador, VAPID)
+        try {
+            $webPush = app(WebPushService::class);
+            $webPush->sendToUser($userId, $title, $message, [
+                'notification_id' => $notification->id,
+                'type' => $type,
+                'link' => $link ?? '',
+            ]);
+        } catch (\Exception $e) {
+            report($e);
+        }
+
         return $notification;
     }
 
@@ -189,6 +202,19 @@ class NotificationController extends Controller
                 'type' => $type,
                 'link' => $link ?? '',
             ]);
+        } catch (\Exception $e) {
+            report($e);
+        }
+
+        // Web push por usuario (VAPID)
+        try {
+            $webPush = app(WebPushService::class);
+            foreach ($userIds as $userId) {
+                $webPush->sendToUser($userId, $title, $message, [
+                    'type' => $type,
+                    'link' => $link ?? '',
+                ]);
+            }
         } catch (\Exception $e) {
             report($e);
         }

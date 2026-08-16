@@ -17,6 +17,10 @@ use App\Http\Controllers\Api\GuestStudentController;
 use App\Http\Controllers\Api\ExamController;
 use App\Http\Controllers\Api\SubmittedWorkController;
 use App\Http\Controllers\Api\RankingController;
+use App\Http\Controllers\Api\GamificationController;
+use App\Http\Controllers\Api\AcademicEventController;
+use App\Http\Controllers\Api\SystemTranslationController;
+use App\Http\Controllers\Api\PushSubscriptionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -409,7 +413,62 @@ Route::prefix('v1')->group(function () {
                     ->middleware('cache.api');
                 Route::get('/download/{filename}', [AdminController::class, 'downloadBackup']);
             });
+
+            Route::prefix('translations')->group(function () {
+                Route::get('/', [SystemTranslationController::class, 'index'])
+                    ->middleware('cache.api');
+                Route::post('/', [SystemTranslationController::class, 'store'])
+                    ->middleware(['audit', 'throttle:60,1']);
+                Route::post('/bulk', [SystemTranslationController::class, 'bulkUpdate'])
+                    ->middleware(['audit', 'throttle:30,1']);
+                Route::delete('/{id}', [SystemTranslationController::class, 'destroy'])
+                    ->middleware('audit');
+            });
+
+            Route::post('/achievements/sync', [GamificationController::class, 'sync'])
+                ->middleware('audit');
         });
+
+    // ============================================================
+    // GAMIFICACIÓN (Estudiante autenticado)
+    // ============================================================
+
+    Route::prefix('gamification')->middleware(['role:student'])->group(function () {
+        Route::get('/summary', [GamificationController::class, 'summary'])
+            ->middleware('cache.api');
+        Route::post('/check', [GamificationController::class, 'check'])
+            ->middleware('throttle:20,1');
+    });
+
+    // ============================================================
+    // CALENDARIO ACADÉMICO (Docente/Admin)
+    // ============================================================
+
+    Route::prefix('calendar')->middleware(['role:teacher,admin'])->group(function () {
+        Route::get('/', [AcademicEventController::class, 'index'])
+            ->middleware('cache.api');
+        Route::post('/', [AcademicEventController::class, 'store'])
+            ->middleware('audit');
+        Route::put('/{id}', [AcademicEventController::class, 'update'])
+            ->middleware('audit');
+        Route::delete('/{id}', [AcademicEventController::class, 'destroy'])
+            ->middleware('audit');
+    });
+
+    // ============================================================
+    // PUSH NOTIFICATIONS WEB (Autenticado)
+    // ============================================================
+
+    Route::prefix('push')->group(function () {
+        Route::get('/config', [PushSubscriptionController::class, 'config'])
+            ->middleware('cache.api');
+        Route::post('/subscribe', [PushSubscriptionController::class, 'store'])
+            ->middleware(['audit', 'throttle:10,1']);
+        Route::post('/unsubscribe', [PushSubscriptionController::class, 'destroy'])
+            ->middleware('audit');
+        Route::post('/test', [PushSubscriptionController::class, 'test'])
+            ->middleware('throttle:5,1');
+    });
     });
 
     // ============================================================
@@ -425,6 +484,9 @@ Route::prefix('v1')->group(function () {
 
     Route::get('/config', [AdminController::class, 'getConfig'])
         ->middleware('throttle:30,1');
+
+    Route::get('/translations/overrides', [SystemTranslationController::class, 'publicOverrides'])
+        ->middleware('throttle:60,1');
 
     // ============================================================
     // HEALTH CHECK

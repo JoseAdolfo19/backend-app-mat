@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             DniSeeder::class,
             ExamSeeder::class,
             RankingSeeder::class,
+            GamificationSeeder::class,
         ]);
     }
 }

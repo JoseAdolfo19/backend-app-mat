@@ -148,6 +148,28 @@ return [
     'device_registered' => 'Dispositivo notificacionespaq tukuy',
     'device_unregistered' => 'Dispositivo tukuy',
 
+    // Calendar
+    'event_created' => 'Evento ruray tukukurka',
+    'event_updated' => 'Evento allichasqa',
+    'event_deleted' => 'Evento pichasqa',
+    'event_not_found' => 'Evento mana tarishkachu',
+
+    // Web Push
+    'push_subscribed' => 'Notificaciones suscripcion allichasqa',
+    'push_unsubscribed' => 'Notificaciones suscripcion pichasqa',
+    'push_test_title' => 'MathFlow Yachana',
+    'push_test_body' => '¡Notificacionespush kawsanmi!',
+    'push_test_sent' => 'Yachana notificacion apachisqa',
+
+    // Translations
+    'translation_saved' => 'Traduccion wakichisqa',
+    'translations_saved' => 'Traducciones wakichisqa',
+    'translation_deleted' => 'Traduccion pichasqa',
+    'translation_not_found' => 'Traduccion mana tarishkachu',
+
+    // Gamification
+    'achievements_synced' => 'Logros wakichisqa',
+
     // Progress
     'progress_updated' => 'Progreso llanthuray tukuy',
 

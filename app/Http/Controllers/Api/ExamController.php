@@ -542,6 +542,26 @@ class ExamController extends Controller
 
             DB::commit();
 
+            // Gamificación: XP por examen completado + logros
+            $gamification = null;
+            try {
+                $user = auth()->user();
+                if ($user?->isStudent()) {
+                    $gamificationService = app(\App\Services\GamificationService::class);
+                    $xp = \App\Services\GamificationService::XP_EVALUATION_COMPLETED;
+                    if ($score >= 19.9) {
+                        $xp += \App\Services\GamificationService::XP_PERFECT_SCORE;
+                    }
+                    $gamification = $gamificationService->awardXp($user, $xp, 'exam_completed');
+                    $gamification['new_achievements'] = array_map(
+                        fn ($a) => ['slug' => $a->slug, 'name' => $a->name_es, 'icon' => $a->icon],
+                        $gamificationService->checkAchievements($user)
+                    );
+                }
+            } catch (\Exception $e) {
+                report($e);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Examen enviado correctamente',
@@ -553,7 +573,8 @@ class ExamController extends Controller
                     'earned_points' => $earnedPoints,
                     'total_points' => $exam->total_points,
                     'answers' => $answersResult,
-                ]
+                ],
+                'gamification' => $gamification,
             ]);
 
         } catch (\Exception $e) {

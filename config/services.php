@@ -46,6 +46,12 @@ return [
         'project_id' => env('FCM_PROJECT_ID'),
     ],
 
+    'webpush' => [
+        'vapid_public_key' => env('VAPID_PUBLIC_KEY'),
+        'vapid_private_key' => env('VAPID_PRIVATE_KEY'),
+        'subject_email' => env('VAPID_SUBJECT_EMAIL', 'admin@mathflow.com'),
+    ],
+
     'groq' => [
         'key' => env('GROQ_API_KEY'),
         'url' => env('GROQ_API_URL', 'https://api.groq.com/openai/v1/chat/completions'),

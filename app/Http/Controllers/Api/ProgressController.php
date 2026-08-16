@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use App\Services\GamificationService;
 
 class ProgressController extends Controller
 {
@@ -289,10 +290,22 @@ class ProgressController extends Controller
         // Verificar y otorgar insignias
         $badges = $this->checkAndAwardBadges();
 
+        // Gamificación: XP por lección completada + logros
+        $gamification = null;
+        if ($progress->status === LessonProgress::STATUS_COMPLETED) {
+            $gamificationService = app(GamificationService::class);
+            $gamification = $gamificationService->awardXp(Auth::user(), GamificationService::XP_LESSON_COMPLETED, 'lesson_completed');
+            $gamification['new_achievements'] = array_map(
+                fn ($a) => ['slug' => $a->slug, 'name' => $a->name_es, 'icon' => $a->icon],
+                $gamificationService->checkAchievements(Auth::user())
+            );
+        }
+
         return response()->json([
             'message' => __('progress_updated'),
             'progress' => $progress,
-            'badges' => $badges
+            'badges' => $badges,
+            'gamification' => $gamification
         ]);
     }
 

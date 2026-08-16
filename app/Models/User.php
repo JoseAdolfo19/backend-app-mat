@@ -116,6 +116,23 @@ class User extends Authenticatable
         return $this->hasMany(Notification::class);
     }
 
+    public function achievements()
+    {
+        return $this->belongsToMany(Achievement::class, 'user_achievements')
+            ->withPivot('unlocked_at')
+            ->withTimestamps();
+    }
+
+    public function academicEvents()
+    {
+        return $this->hasMany(AcademicEvent::class);
+    }
+
+    public function pushSubscriptions()
+    {
+        return $this->hasMany(PushSubscription::class);
+    }
+
     // ========== MÉTODOS DE AYUDA ==========
     public function isAdmin()
     {

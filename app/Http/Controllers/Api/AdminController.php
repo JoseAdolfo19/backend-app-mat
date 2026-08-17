@@ -60,7 +60,7 @@ class AdminController extends Controller
             'full_name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => 'required|string|min:8',
-            'role' => 'required|in:teacher,student,parent',
+            'role' => 'required|in:teacher,student,parent,director,coordinador',
             'institution' => 'nullable|string',
             'grade' => 'nullable|string'
         ]);
@@ -95,7 +95,7 @@ class AdminController extends Controller
                 'user_id' => $user->id,
                 'academic_level' => 'basic'
             ]);
-        } elseif ($validated['role'] === Role::TEACHER) {
+        } elseif (in_array($validated['role'], [Role::TEACHER, Role::COORDINATOR, Role::DIRECTOR])) {
             TeacherProfile::create([
                 'id' => Str::uuid(),
                 'user_id' => $user->id
@@ -115,7 +115,7 @@ class AdminController extends Controller
         $validated = $request->validate([
             'full_name' => 'sometimes|string|max:255',
             'email' => 'sometimes|email|unique:users,email,' . $id,
-            'role' => 'sometimes|in:teacher,student',
+            'role' => 'sometimes|in:teacher,student,director,coordinador',
             'institution' => 'nullable|string',
             'grade' => 'nullable|string',
             'is_active' => 'sometimes|boolean'
@@ -410,7 +410,7 @@ class AdminController extends Controller
             }
 
             $role = Role::where('name', strtolower($roleName))->first();
-            if (!$role || !in_array($role->name, ['teacher', 'student', 'parent'])) {
+            if (!$role || !in_array($role->name, ['teacher', 'student', 'parent', 'director', 'coordinador'])) {
                 $errors[] = __('import_row_invalid_role', ['row' => $rowNum, 'role' => $roleName]);
                 continue;
             }

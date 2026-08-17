@@ -16,3 +16,6 @@ Schedule::call(function () {
 Schedule::call(function () {
     DB::table('audit_logs')->where('created_at', '<', now()->subDays(180))->delete();
 })->daily()->at('02:30');
+
+// Respaldo automático de la base de datos (diario) + limpieza de respaldos viejos
+Schedule::command('mathflow:backup --prune')->daily()->at('03:00');

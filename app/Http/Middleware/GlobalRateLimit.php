@@ -31,10 +31,10 @@ class GlobalRateLimit
 
         $response = $next($request);
 
-        return $response->withHeaders([
-            'X-RateLimit-Limit' => $maxAttempts,
-            'X-RateLimit-Remaining' => RateLimiter::remaining($limiterKey, $maxAttempts),
-        ]);
+        $response->headers->set('X-RateLimit-Limit', $maxAttempts);
+        $response->headers->set('X-RateLimit-Remaining', RateLimiter::remaining($limiterKey, $maxAttempts));
+
+        return $response;
     }
 
     private function resolveLimiterKey(Request $request): string

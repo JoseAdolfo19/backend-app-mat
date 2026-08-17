@@ -40,7 +40,7 @@ class GradesExport implements FromCollection, WithHeadings, WithMapping, WithSty
 
     public function map($row): array
     {
-        $status = self::STATUS[$this->lang] ?? self->STATUS['es'];
+        $status = self::STATUS[$this->lang] ?? self::STATUS['es'];
 
         $studentName = $row->student_name ?? ($row->user->full_name ?? 'N/A');
         $evalTitle = $row->evaluation_title ?? ($row->evaluation->title ?? 'N/A');
@@ -50,7 +50,7 @@ class GradesExport implements FromCollection, WithHeadings, WithMapping, WithSty
         $correct = $row->correct_answers ?? 0;
         $total = $row->total_questions ?? 0;
         $date = $row->completed_at ?? ($row->created_at?->format('d/m/Y H:i') ?? 'N/A');
-        $rowStatus = $status[$row->status] ?? ($row->status ?? '');
+        $rowStatus = $row->status ? ($status[$row->status] ?? $row->status) : '';
 
         $result = [
             $studentName,

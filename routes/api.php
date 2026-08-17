@@ -21,6 +21,8 @@ use App\Http\Controllers\Api\GamificationController;
 use App\Http\Controllers\Api\AcademicEventController;
 use App\Http\Controllers\Api\SystemTranslationController;
 use App\Http\Controllers\Api\PushSubscriptionController;
+use App\Http\Controllers\Api\MessageController;
+use App\Http\Controllers\Api\ForumController;
 
 /*
 |--------------------------------------------------------------------------
@@ -350,6 +352,10 @@ Route::prefix('v1')->group(function () {
                 ->middleware('throttle:5,1');
             Route::get('/export/grades/excel', [ReportController::class, 'exportGradesExcel'])
                 ->middleware('throttle:5,1');
+            Route::get('/export/student/{studentId}/csv', [ReportController::class, 'exportStudentReportCSV'])
+                ->middleware('throttle:5,1');
+            Route::get('/export/grades/csv', [ReportController::class, 'exportGradesCSV'])
+                ->middleware('throttle:5,1');
         });
         
         // ============================================================
@@ -468,6 +474,29 @@ Route::prefix('v1')->group(function () {
             ->middleware('audit');
         Route::post('/test', [PushSubscriptionController::class, 'test'])
             ->middleware('throttle:5,1');
+    });
+
+    // ============================================================
+    // MENSAJERÍA DOCENTE-ESTUDIANTE (Autenticado, anti-IDOR)
+    // ============================================================
+
+    Route::prefix('conversations')->middleware(['throttle:30,1'])->group(function () {
+        Route::get('/', [MessageController::class, 'index']);
+        Route::post('/', [MessageController::class, 'store']);
+        Route::get('/{id}', [MessageController::class, 'show']);
+        Route::post('/{id}/reply', [MessageController::class, 'reply']);
+    });
+
+    // ============================================================
+    // FORO DE CLASE (Docentes crean hilos, estudiantes comentan)
+    // ============================================================
+
+    Route::prefix('forum')->middleware(['throttle:30,1'])->group(function () {
+        Route::get('/', [ForumController::class, 'index']);
+        Route::post('/', [ForumController::class, 'store']);
+        Route::get('/{id}', [ForumController::class, 'show']);
+        Route::post('/{id}/post', [ForumController::class, 'post']);
+        Route::post('/{id}/close', [ForumController::class, 'close']);
     });
     });
 

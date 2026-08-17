@@ -141,7 +141,24 @@ class User extends Authenticatable
 
     public function isTeacher()
     {
-        return $this->role?->name === Role::TEACHER;
+        // Jerarquía: coordinador y director también actúan como docentes
+        return in_array($this->role?->name, Role::TEACHING_ROLES);
+    }
+
+    public function isDirector()
+    {
+        return $this->role?->name === Role::DIRECTOR;
+    }
+
+    public function isCoordinator()
+    {
+        return $this->role?->name === Role::COORDINATOR;
+    }
+
+    public function isScopedTeacher()
+    {
+        // Docente/coordinador ven solo lo suyo; admin y director ven todo (global)
+        return in_array($this->role?->name, [Role::TEACHER, Role::COORDINATOR]);
     }
 
     public function isStudent()

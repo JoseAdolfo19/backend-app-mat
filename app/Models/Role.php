@@ -19,6 +19,11 @@ class Role extends Model
     const TEACHER = 'teacher';
     const STUDENT = 'student';
     const PARENT = 'parent';
+    const DIRECTOR = 'director';
+    const COORDINATOR = 'coordinador';
+
+    // Roles que se comportan como docente (jerarquía de acceso a contenido)
+    const TEACHING_ROLES = [self::TEACHER, self::COORDINATOR, self::DIRECTOR];
 
     // ========== RELACIONES ==========
     public function users()
@@ -45,5 +50,15 @@ class Role extends Model
     public function scopeParent($query)
     {
         return $query->where('name', self::PARENT);
+    }
+
+    public function scopeDirector($query)
+    {
+        return $query->where('name', self::DIRECTOR);
+    }
+
+    public function scopeCoordinator($query)
+    {
+        return $query->where('name', self::COORDINATOR);
     }
 }

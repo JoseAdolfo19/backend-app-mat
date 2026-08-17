@@ -45,7 +45,7 @@ class ReportController extends Controller
         }
 
         // Si es docente, solo ver resultados de sus propias evaluaciones
-        if (Auth::user()->isTeacher()) {
+        if (Auth::user()->isScopedTeacher()) {
             $evaluationIds = Evaluation::where('teacher_id', Auth::id())->pluck('id');
             $query->whereIn('evaluation_id', $evaluationIds);
         }
@@ -105,7 +105,7 @@ class ReportController extends Controller
     {
         $user = User::with(['studentProfile'])->findOrFail($userId);
 
-        if (Auth::user()->isTeacher()) {
+        if (Auth::user()->isScopedTeacher()) {
             $evaluationIds = Evaluation::where('teacher_id', Auth::id())->pluck('id');
             $hasResults = EvaluationResult::where('user_id', $userId)
                 ->whereIn('evaluation_id', $evaluationIds)
@@ -194,7 +194,7 @@ class ReportController extends Controller
      */
     public function exportPerformancePDF(Request $request)
     {
-        $teacherId = Auth::user()->isTeacher() ? Auth::id() : null;
+        $teacherId = Auth::user()->isScopedTeacher() ? Auth::id() : null;
         $filters = array_filter([
             'student_id' => $request->student_id,
             'evaluation_id' => $request->evaluation_id,
@@ -222,7 +222,7 @@ class ReportController extends Controller
      */
     public function exportPerformanceExcel(Request $request)
     {
-        $teacherId = Auth::user()->isTeacher() ? Auth::id() : null;
+        $teacherId = Auth::user()->isScopedTeacher() ? Auth::id() : null;
         $filters = array_filter([
             'student_id' => $request->student_id,
             'evaluation_id' => $request->evaluation_id,
@@ -274,7 +274,7 @@ class ReportController extends Controller
      */
     public function exportGradesPDF(Request $request)
     {
-        $teacherId = Auth::user()->isTeacher() ? Auth::id() : null;
+        $teacherId = Auth::user()->isScopedTeacher() ? Auth::id() : null;
         $filters = array_filter([
             'student_id' => $request->student_id,
             'evaluation_id' => $request->evaluation_id,
@@ -302,7 +302,7 @@ class ReportController extends Controller
      */
     public function exportGradesExcel(Request $request)
     {
-        $teacherId = Auth::user()->isTeacher() ? Auth::id() : null;
+        $teacherId = Auth::user()->isScopedTeacher() ? Auth::id() : null;
         $filters = array_filter([
             'student_id' => $request->student_id,
             'evaluation_id' => $request->evaluation_id,
@@ -315,6 +315,105 @@ class ReportController extends Controller
             (new GradesPDFExport($teacherId, $filters))->getData(),
             $lang
         ), 'calificaciones.xlsx');
+    }
+
+    /**
+     * Exportar reporte individual de un estudiante en CSV.
+     */
+    public function exportStudentReportCSV(Request $request, $studentId)
+    {
+        $export = new StudentProgressPDFExport($studentId);
+        $data = $export->getData();
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="reporte-estudiante-' . $studentId . '.csv"',
+        ];
+
+        $callback = function () use ($data, $studentId) {
+            $handle = fopen('php://output', 'w');
+            $studentName = $data['student'] ? ($data['student']->full_name ?? 'Estudiante') : 'Estudiante';
+            fputcsv($handle, [$this->sanitizeCsvValue($studentName), $studentId]);
+            fputcsv($handle, []);
+            fputcsv($handle, [__('csv_header_evaluation'), __('csv_header_type'), __('csv_header_score'), __('csv_header_date')]);
+
+            foreach (($data['results'] ?? []) as $row) {
+                $row = (array) $row;
+                fputcsv($handle, [
+                    $this->sanitizeCsvValue($row['evaluation_name'] ?? ''),
+                    $this->sanitizeCsvValue($row['type'] ?? ''),
+                    $row['score'] ?? '',
+                    $row['completed_at'] ?? '',
+                ]);
+            }
+
+            if (isset($data['average'])) {
+                fputcsv($handle, []);
+                fputcsv($handle, [__('csv_header_average'), $data['average']]);
+            }
+
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Exportar todas las calificaciones en CSV.
+     */
+    public function exportGradesCSV(Request $request)
+    {
+        $teacherId = Auth::user()->isScopedTeacher() ? Auth::id() : null;
+        $filters = array_filter([
+            'student_id' => $request->student_id,
+            'evaluation_id' => $request->evaluation_id,
+            'area' => $request->area,
+        ]);
+
+        $data = (new GradesPDFExport($teacherId, $filters))->getData();
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="calificaciones-' . now()->format('Y-m-d_His') . '.csv"',
+        ];
+
+        $callback = function () use ($data) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                __('csv_header_student'),
+                __('csv_header_evaluation'),
+                __('csv_header_type'),
+                __('csv_header_score'),
+                __('csv_header_letter'),
+            ]);
+
+            foreach (($data['rows'] ?? $data ?? []) as $row) {
+                $row = (array) $row;
+                fputcsv($handle, [
+                    $this->sanitizeCsvValue($row['student_name'] ?? $row['full_name'] ?? ''),
+                    $this->sanitizeCsvValue($row['evaluation_name'] ?? ''),
+                    $this->sanitizeCsvValue($row['type'] ?? ''),
+                    $row['score'] ?? '',
+                    $this->sanitizeCsvValue($row['letter'] ?? ''),
+                ]);
+            }
+
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    private function sanitizeCsvValue(string $value): string
+    {
+        $dangerousPrefixes = ['=', '+', '-', '@', "\t", "\r"];
+        foreach ($dangerousPrefixes as $prefix) {
+            if (str_starts_with($value, $prefix)) {
+                $value = "'" . $value;
+                break;
+            }
+        }
+        return $value;
     }
 
     // ========== HTML BUILDERS ==========
@@ -337,7 +436,7 @@ class ReportController extends Controller
         $workQuery = SubmittedWork::with(['student', 'lesson', 'evaluation'])
             ->where('status', 'graded');
 
-        if (Auth::user()->isTeacher()) {
+        if (Auth::user()->isScopedTeacher()) {
             $teacherEvalIds = $this->teacherScopedEvaluationIds();
             $teacherLessonIds = $this->teacherScopedLessonIds();
             $evalQuery->whereIn('evaluation_id', $teacherEvalIds);
@@ -883,7 +982,7 @@ class ReportController extends Controller
      */
     private function teacherScopedEvaluationIds(): array
     {
-        if (!Auth::user()->isTeacher()) {
+        if (!Auth::user()->isScopedTeacher()) {
             return [];
         }
         return Evaluation::where('teacher_id', Auth::id())->pluck('id')->all();
@@ -891,7 +990,7 @@ class ReportController extends Controller
 
     private function teacherScopedLessonIds(): array
     {
-        if (!Auth::user()->isTeacher()) {
+        if (!Auth::user()->isScopedTeacher()) {
             return [];
         }
         return \App\Models\Lesson::where('teacher_id', Auth::id())->pluck('id')->all();
@@ -914,7 +1013,7 @@ class ReportController extends Controller
             $query->whereBetween('created_at', $this->getPeriodDateRange($request->period));
         }
 
-        if (Auth::user()->isTeacher()) {
+        if (Auth::user()->isScopedTeacher()) {
             $evaluationIds = Evaluation::where('teacher_id', Auth::id())->pluck('id');
             $query->whereIn('evaluation_id', $evaluationIds);
         }

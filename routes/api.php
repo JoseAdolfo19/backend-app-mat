@@ -515,6 +515,11 @@ Route::prefix('v1')->group(function () {
         // Cursos del salón
         Route::get('/{salonId}/courses', [SalonController::class, 'courses']);
         Route::post('/{salonId}/courses', [SalonController::class, 'storeCourse']);
+
+        // Alumnos del salón
+        Route::get('/{salonId}/students', [SalonController::class, 'salonStudents']);
+        Route::post('/{salonId}/students', [SalonController::class, 'storeStudent']);
+        Route::post('/{salonId}/students/import', [SalonController::class, 'importStudents']);
     });
 
     // Catálogos para coordinador/director
@@ -533,6 +538,9 @@ Route::prefix('v1')->group(function () {
         Route::post('/{courseId}/unenroll', [SalonController::class, 'unenroll']);
         Route::get('/{courseId}/students', [SalonController::class, 'courseStudents']);
         Route::get('/{courseId}', [SalonController::class, 'studentCourseDetail']);
+
+        // Auto-matrícula del estudiante por código de curso
+        Route::post('/enroll-by-code', [SalonController::class, 'enrollByCode']);
     });
 
     // JUEGOS DIDÁCTICOS (Quizizz/Kahoot) + comprobante de puntaje

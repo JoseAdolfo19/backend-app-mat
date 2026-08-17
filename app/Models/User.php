@@ -29,6 +29,7 @@ class User extends Authenticatable
         'profile_image',
         'institution',
         'grade',
+        'salon_id',
         'google_id',
         'google_token',
         'provider',
@@ -84,6 +85,11 @@ class User extends Authenticatable
     public function teacherProfile()
     {
         return $this->hasOne(TeacherProfile::class);
+    }
+
+    public function salon()
+    {
+        return $this->belongsTo(Salon::class, 'salon_id');
     }
 
     public function lessons()

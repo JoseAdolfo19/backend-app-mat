@@ -318,4 +318,189 @@ class SalonApiTest extends TestCase
         $this->getJson("$this->baseUrl/catalog/teachers")->assertStatus(403);
         $this->getJson("$this->baseUrl/catalog/students")->assertStatus(403);
     }
+
+    // ===== AUTO-MATRÍCULA POR SALÓN =====
+
+    public function test_course_gets_auto_code()
+    {
+        $this->actingAsUser($this->coordinator);
+
+        $res = $this->postJson("$this->baseUrl/salones/{$this->salon->id}/courses", [
+            'name' => 'Quimica',
+            'teacher_id' => $this->teacher2->id,
+        ])->assertStatus(201);
+
+        $code = $res->json('data.code');
+        $this->assertNotEmpty($code);
+        $this->assertTrue(strlen($code) >= 6);
+    }
+
+    public function test_student_belongs_to_salon_gets_auto_enrolled_in_salon_courses()
+    {
+        $this->actingAsUser($this->coordinator);
+
+        // Crear un curso adicional en el salón
+        $this->postJson("$this->baseUrl/salones/{$this->salon->id}/courses", [
+            'name' => 'Fisica',
+            'teacher_id' => $this->teacher2->id,
+        ])->assertStatus(201);
+
+        // Registrar un alumno en el salón
+        $this->postJson("$this->baseUrl/salones/{$this->salon->id}/students", [
+            'dni' => '12345678',
+            'full_name' => 'Nuevo Alumno Salon',
+            'email' => 'nuevo-alumno@test.com',
+            'password' => 'password123',
+        ])->assertStatus(201);
+
+        $student = User::where('email', 'nuevo-alumno@test.com')->first();
+        $this->assertNotNull($student);
+        $this->assertEquals($this->salon->id, $student->salon_id);
+
+        // Debe estar matriculado en ambos cursos del salón (Matematica + Fisica)
+        $this->assertEquals(2, Enrollment::where('student_id', $student->id)->count());
+    }
+
+    public function test_creating_course_auto_enrolls_existing_salon_students()
+    {
+        $this->actingAsUser($this->coordinator);
+
+        // Asignar un alumno existente al salón
+        $this->student->update(['salon_id' => $this->salon->id]);
+
+        // Crear un nuevo curso: debe matricular al alumno del salón automáticamente
+        $this->postJson("$this->baseUrl/salones/{$this->salon->id}/courses", [
+            'name' => 'Quimica',
+            'teacher_id' => $this->teacher2->id,
+        ])->assertStatus(201);
+
+        $quimica = Course::where('name', 'Quimica')->first();
+        $this->assertDatabaseHas('enrollments', [
+            'course_id' => $quimica->id,
+            'student_id' => $this->student->id,
+        ]);
+    }
+
+    public function test_student_can_self_enroll_with_course_code()
+    {
+        // Asignar alumno al salón
+        $this->student->update(['salon_id' => $this->salon->id]);
+
+        // Asignar código al curso
+        $this->course->update(['code' => 'ABCD12']);
+
+        $this->actingAsUser($this->student);
+
+        $this->postJson("$this->baseUrl/courses/enroll-by-code", ['code' => 'abcd12'])
+            ->assertOk();
+
+        $this->assertDatabaseHas('enrollments', [
+            'course_id' => $this->course->id,
+            'student_id' => $this->student->id,
+        ]);
+    }
+
+    public function test_student_cannot_self_enroll_in_other_salon_course()
+    {
+        // Otro salón
+        $otherSalon = Salon::create([
+            'id' => Str::uuid(),
+            'grade' => '6to',
+            'section' => 'B',
+            'coordinator_id' => $this->coordinator->id,
+        ]);
+        $otherCourse = Course::create([
+            'id' => Str::uuid(),
+            'salon_id' => $otherSalon->id,
+            'name' => 'Historia',
+            'code' => 'XYZ789',
+            'teacher_id' => $this->teacher2->id,
+        ]);
+
+        $this->student->update(['salon_id' => $this->salon->id]);
+        $this->actingAsUser($this->student);
+
+        $this->postJson("$this->baseUrl/courses/enroll-by-code", ['code' => 'xyz789'])
+            ->assertStatus(403);
+    }
+
+    public function test_salon_students_can_be_searched()
+    {
+        $this->actingAsUser($this->coordinator);
+
+        $this->student->update(['salon_id' => $this->salon->id, 'dni' => '11112222']);
+        $this->otherStudent->update(['salon_id' => $this->salon->id, 'dni' => '33334444']);
+
+        $res = $this->getJson("$this->baseUrl/salones/{$this->salon->id}/students?search=1111")
+            ->assertOk();
+
+        $this->assertCount(1, $res->json('data'));
+        $this->assertEquals('11112222', $res->json('data.0.dni'));
+    }
+
+    public function test_coordinator_can_register_student_in_salon()
+    {
+        $this->actingAsUser($this->coordinator);
+
+        $this->postJson("$this->baseUrl/salones/{$this->salon->id}/students", [
+            'dni' => '87654321',
+            'full_name' => 'Alumno Registrado',
+            'email' => 'registrado@test.com',
+            'password' => 'password123',
+        ])->assertStatus(201);
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'registrado@test.com',
+            'salon_id' => $this->salon->id,
+        ]);
+    }
+
+    public function test_student_cannot_register_other_student_in_salon()
+    {
+        $this->actingAsUser($this->student);
+
+        $this->postJson("$this->baseUrl/salones/{$this->salon->id}/students", [
+            'dni' => '11223344',
+            'full_name' => 'Intruso',
+            'email' => 'intruso@test.com',
+            'password' => 'password123',
+        ])->assertStatus(403);
+    }
+
+    public function test_coordinator_can_import_students_from_csv()
+    {
+        $this->actingAsUser($this->coordinator);
+
+        $csv = "dni,full_name,email,password\n"
+            . "55554444,Importado Uno,import1@test.com,pass123\n"
+            . "55553333,Importado Dos,import2@test.com,pass123\n";
+
+        $this->post("$this->baseUrl/salones/{$this->salon->id}/students/import", [
+            'file' => \Illuminate\Http\UploadedFile::fake()->createWithContent('alumnos.csv', $csv),
+        ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('imported', 2);
+
+        $this->assertDatabaseHas('users', ['email' => 'import1@test.com', 'salon_id' => $this->salon->id]);
+        $this->assertDatabaseHas('users', ['email' => 'import2@test.com', 'salon_id' => $this->salon->id]);
+
+        // Ambos importados quedan matriculados en el curso del salón
+        $imported1 = User::where('email', 'import1@test.com')->first();
+        $this->assertDatabaseHas('enrollments', [
+            'course_id' => $this->course->id,
+            'student_id' => $imported1->id,
+        ]);
+    }
+
+    public function test_student_cannot_import_in_salon()
+    {
+        $this->actingAsUser($this->student);
+
+        $csv = "dni,full_name,email,password\n55554444,Intruso,x@test.com,pass123\n";
+
+        $this->post("$this->baseUrl/salones/{$this->salon->id}/students/import", [
+            'file' => \Illuminate\Http\UploadedFile::fake()->createWithContent('alumnos.csv', $csv),
+        ], ['Accept' => 'application/json'])
+            ->assertStatus(403);
+    }
 }

@@ -41,6 +41,11 @@ class Salon extends Model
         return $this->belongsToMany(User::class, 'courses', 'salon_id', 'teacher_id')->distinct();
     }
 
+    public function students()
+    {
+        return $this->hasMany(User::class, 'salon_id');
+    }
+
     public function getDisplayNameAttribute()
     {
         return trim("{$this->grade} \"{$this->section}\"");

@@ -16,6 +16,7 @@ class Course extends Model
         'id',
         'salon_id',
         'name',
+        'code',
         'description',
         'teacher_id',
     ];
@@ -43,5 +44,18 @@ class Course extends Model
     public function students()
     {
         return $this->belongsToMany(User::class, 'enrollments', 'course_id', 'student_id')->withPivot('enrolled_by', 'created_at');
+    }
+
+    public static function generateCode(): string
+    {
+        $characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        do {
+            $code = '';
+            for ($i = 0; $i < 6; $i++) {
+                $code .= $characters[random_int(0, strlen($characters) - 1)];
+            }
+        } while (static::where('code', $code)->exists());
+
+        return $code;
     }
 }

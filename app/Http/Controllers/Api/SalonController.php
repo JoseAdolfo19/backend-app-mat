@@ -11,6 +11,10 @@ use App\Models\User;
 use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Imports\SalonStudentsImport;
 
 class SalonController extends Controller
 {
@@ -127,9 +131,15 @@ class SalonController extends Controller
 
         // Docente solo puede ver cursos donde enseña
         if ($role === Role::TEACHER) {
-            $courses = $salon->courses()->where('teacher_id', $user->id)->get();
+            $courses = $salon->courses()
+                ->where('teacher_id', $user->id)
+                ->withCount('enrollments')
+                ->get();
         } else {
-            $courses = $salon->courses()->with('teacher:id,full_name')->get();
+            $courses = $salon->courses()
+                ->with('teacher:id,full_name')
+                ->withCount('enrollments')
+                ->get();
         }
 
         return response()->json(['data' => $courses]);
@@ -152,11 +162,15 @@ class SalonController extends Controller
         $course = Course::create([
             'salon_id' => $salon->id,
             'name' => $validated['name'],
+            'code' => Course::generateCode(),
             'description' => $validated['description'] ?? null,
             'teacher_id' => $validated['teacher_id'],
         ]);
 
-        return response()->json(['message' => 'Curso creado', 'data' => $course], 201);
+        // Auto-matrícula: todos los alumnos del salón pertenecen a todos los cursos del salón
+        $this->enrollSalonStudentsInCourse($salon, $course, Auth::id());
+
+        return response()->json(['message' => 'Curso creado', 'data' => $course->load('teacher:id,full_name')], 201);
     }
 
     public function updateCourse(Request $request, $courseId)
@@ -281,6 +295,11 @@ class SalonController extends Controller
                 'student_id' => $studentId,
             ], ['enrolled_by' => $user->id]);
             $added++;
+
+            // Si el estudiante pertenece al salón del curso, matricularlo en todos los cursos del salón
+            if ($student->salon_id && (string) $student->salon_id === (string) $course->salon_id) {
+                $this->enrollStudentInSalonCourses($course->salon, $student, $user->id);
+            }
         }
 
         return response()->json(['message' => "$added estudiante(s) matriculado(s)", 'added' => $added]);
@@ -319,6 +338,160 @@ class SalonController extends Controller
         $students = $course->students()->select('users.id', 'users.full_name', 'users.email')->get();
 
         return response()->json(['data' => $students]);
+    }
+
+    // ============================================================
+    // ALUMNOS DEL SALÓN — registro y listado
+    // ============================================================
+
+    public function salonStudents(Request $request, $salonId)
+    {
+        if (!$this->isCoordinatorOrDirector()) {
+            return response()->json(['message' => 'No tienes permiso'], 403);
+        }
+
+        $salon = Salon::findOrFail($salonId);
+
+        $query = $salon->students()->select('id', 'full_name', 'email', 'dni', 'salon_id', 'grade');
+
+        if ($request->has('search') && trim($request->search) !== '') {
+            $term = trim($request->search);
+            $query->where(function ($q) use ($term) {
+                $q->where('full_name', 'like', "%{$term}%")
+                    ->orWhere('email', 'like', "%{$term}%")
+                    ->orWhere('dni', 'like', "%{$term}%");
+            });
+        }
+
+        $students = $query->orderBy('full_name')->get();
+
+        return response()->json(['data' => $students]);
+    }
+
+    public function storeStudent(Request $request, $salonId)
+    {
+        if (!$this->isCoordinatorOrDirector()) {
+            return response()->json(['message' => 'Solo coordinador o director puede registrar alumnos'], 403);
+        }
+
+        $salon = Salon::findOrFail($salonId);
+
+        $validated = $request->validate([
+            'dni' => 'required|string|max:8|unique:users,dni',
+            'full_name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:users,email',
+            'password' => 'required|string|min:6',
+            'grade' => 'nullable|string|max:20',
+        ]);
+
+        $studentRoleId = Role::where('name', Role::STUDENT)->first()?->id;
+
+        $student = User::create([
+            'dni' => $validated['dni'],
+            'full_name' => $validated['full_name'],
+            'email' => $validated['email'],
+            'password' => $validated['password'],
+            'role_id' => $studentRoleId,
+            'salon_id' => $salon->id,
+            'grade' => $validated['grade'] ?? $salon->grade,
+            'is_active' => true,
+            'institution' => $salon->display_name,
+            'provider' => 'email',
+        ]);
+
+        // Auto-matrícula: el alumno pertenece a todos los cursos de su salón
+        $this->enrollStudentInSalonCourses($salon, $student, Auth::id());
+
+        return response()->json([
+            'message' => 'Alumno registrado y matriculado en los cursos del salón',
+            'data' => $student->only('id', 'dni', 'full_name', 'email', 'salon_id', 'grade'),
+        ], 201);
+    }
+
+    public function importStudents(Request $request, $salonId)
+    {
+        if (!$this->isCoordinatorOrDirector()) {
+            return response()->json(['message' => 'No tienes permiso'], 403);
+        }
+
+        $salon = Salon::findOrFail($salonId);
+
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt,xlsx,xls|max:10240',
+        ]);
+
+        $import = new SalonStudentsImport(
+            $salon,
+            Auth::id(),
+            (string) config('app.default_student_password', 'password123')
+        );
+
+        Excel::import($import, $request->file('file'));
+
+        return response()->json([
+            'message' => "$import->imported alumno(s) importado(s)",
+            'imported' => $import->imported,
+            'errors' => $import->errors,
+        ]);
+    }
+
+    public function enrollByCode(Request $request)
+    {
+        $user = Auth::user();
+        if ($user->role?->name !== Role::STUDENT) {
+            return response()->json(['message' => 'Solo estudiantes pueden auto-matricularse'], 403);
+        }
+
+        $validated = $request->validate([
+            'code' => 'required|string|max:20',
+        ]);
+
+        $course = Course::where('code', strtoupper(trim($validated['code'])))->first();
+
+        if (!$course) {
+            return response()->json(['message' => 'Código de curso no válido'], 422);
+        }
+
+        // El estudiante debe pertenecer al salón del curso para matricularse
+        if (!$user->salon_id || (string) $user->salon_id !== (string) $course->salon_id) {
+            return response()->json(['message' => 'Solo puedes matricularte en cursos de tu salón'], 403);
+        }
+
+        $created = Enrollment::firstOrCreate(
+            ['course_id' => $course->id, 'student_id' => $user->id],
+            ['enrolled_by' => $user->id]
+        )->wasRecentlyCreated;
+
+        return response()->json([
+            'message' => $created ? 'Te matriculaste correctamente en el curso' : 'Ya estás matriculado en este curso',
+            'data' => $course->load(['salon:id,grade,section', 'teacher:id,full_name']),
+        ]);
+    }
+
+    // ============================================================
+    // HELPERS — auto-matrícula por pertenencia al salón
+    // ============================================================
+
+    private function enrollStudentInSalonCourses(Salon $salon, User $student, ?string $byUserId = null): void
+    {
+        $courseIds = $salon->courses()->pluck('id');
+        foreach ($courseIds as $courseId) {
+            Enrollment::firstOrCreate(
+                ['course_id' => $courseId, 'student_id' => $student->id],
+                ['enrolled_by' => $byUserId]
+            );
+        }
+    }
+
+    private function enrollSalonStudentsInCourse(Salon $salon, Course $course, ?string $byUserId = null): void
+    {
+        $studentIds = $salon->students()->pluck('id');
+        foreach ($studentIds as $studentId) {
+            Enrollment::firstOrCreate(
+                ['course_id' => $course->id, 'student_id' => $studentId],
+                ['enrolled_by' => $byUserId]
+            );
+        }
     }
 
     // ============================================================

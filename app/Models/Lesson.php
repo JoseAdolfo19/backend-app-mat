@@ -20,6 +20,7 @@ class Lesson extends Model
         'description',
         'content',
         'teacher_id',
+        'course_id',
         'unit',
         'topic',
         'difficulty',
@@ -73,6 +74,11 @@ class Lesson extends Model
     public function teacher()
     {
         return $this->belongsTo(User::class, 'teacher_id');
+    }
+
+    public function course()
+    {
+        return $this->belongsTo(Course::class, 'course_id');
     }
 
     public function progress()

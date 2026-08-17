@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\SystemTranslationController;
 use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ForumController;
+use App\Http\Controllers\Api\SalonController;
 
 /*
 |--------------------------------------------------------------------------
@@ -497,6 +498,40 @@ Route::prefix('v1')->group(function () {
         Route::get('/{id}', [ForumController::class, 'show']);
         Route::post('/{id}/post', [ForumController::class, 'post']);
         Route::post('/{id}/close', [ForumController::class, 'close']);
+    });
+
+    // ============================================================
+    // SALONES, CURSOS Y LECCIONES POR SALÓN (Coordinador/Docente/Estudiante)
+    // ============================================================
+
+    Route::prefix('salones')->middleware(['throttle:60,1'])->group(function () {
+        Route::get('/', [SalonController::class, 'index']);
+        Route::post('/', [SalonController::class, 'store']);
+        Route::get('/{id}', [SalonController::class, 'show']);
+        Route::put('/{id}', [SalonController::class, 'update']);
+        Route::delete('/{id}', [SalonController::class, 'destroy']);
+
+        // Cursos del salón
+        Route::get('/{salonId}/courses', [SalonController::class, 'courses']);
+        Route::post('/{salonId}/courses', [SalonController::class, 'storeCourse']);
+    });
+
+    // Catálogos para coordinador/director
+    Route::get('/catalog/teachers', [SalonController::class, 'teachers']);
+    Route::get('/catalog/students', [SalonController::class, 'students']);
+
+    // Cursos (lecciones, matrícula)
+    Route::prefix('courses')->middleware(['throttle:60,1'])->group(function () {
+        Route::put('/{courseId}', [SalonController::class, 'updateCourse']);
+        Route::delete('/{courseId}', [SalonController::class, 'destroyCourse']);
+
+        Route::get('/{courseId}/lessons', [SalonController::class, 'courseLessons']);
+        Route::post('/{courseId}/lessons', [SalonController::class, 'storeLesson']);
+
+        Route::post('/{courseId}/enroll', [SalonController::class, 'enroll']);
+        Route::post('/{courseId}/unenroll', [SalonController::class, 'unenroll']);
+        Route::get('/{courseId}/students', [SalonController::class, 'courseStudents']);
+        Route::get('/{courseId}', [SalonController::class, 'studentCourseDetail']);
     });
     });
 

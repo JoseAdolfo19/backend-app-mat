@@ -1,8 +1,8 @@
-# MathFlow — Manual del Administrador
+# KawsayMath — Manual del Administrador
 
 ## 1. Inicio de Sesión
 
-1. Abre la aplicación MathFlow en tu navegador.
+1. Abre la aplicación KawsayMath en tu navegador.
 2. Ingresa tu correo electrónico y contraseña.
 3. Haz clic en **Iniciar Sesión**.
 4. Serás redirigido al **Dashboard de Administrador**.

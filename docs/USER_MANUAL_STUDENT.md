@@ -1,10 +1,10 @@
-# MathFlow — Manual del Estudiante
+# KawsayMath — Manual del Estudiante
 
 ## 1. Registro e Inicio de Sesión
 
 ### 1.1 Crear una cuenta
 
-1. Abre la aplicación MathFlow.
+1. Abre la aplicación KawsayMath.
 2. Haz clic en **Registrarse**.
 3. Completa los campos:
    - **Nombre completo**: Tus nombre y apellidos.
@@ -165,7 +165,7 @@ GET /api/v1/evaluations/{id}/results
 
 ## 5. Badges y Logros
 
-MathFlow te recompensa con insignias por tu actividad:
+KawsayMath te recompensa con insignias por tu actividad:
 
 | Insignia | Descripción | Cómo obtenerla |
 |----------|-------------|----------------|
@@ -188,7 +188,7 @@ GET /api/v1/progress/badges
 
 ## 6. Chat AI — Profesor Euler
 
-MathFlow incluye un asistente de IA llamado **Profesor Euler** que te ayuda con matemáticas.
+KawsayMath incluye un asistente de IA llamado **Profesor Euler** que te ayuda con matemáticas.
 
 ### 6.1 ¿Qué puede hacer Profesor Euler?
 

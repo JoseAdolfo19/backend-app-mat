@@ -1,6 +1,6 @@
-# MathFlow Backend
+# KawsayMath Backend
 
-API REST de la plataforma educativa MathFlow — gestiona **autenticación** (email + Google OAuth), **lecciones**, **evaluaciones**, **exámenes con anti-trampa**, **progreso estudiantil**, **reportes** (PDF/Excel), **chat IA** (Profesor Euler), **notificaciones push** (FCM) y **administración** (usuarios, config, backups). Trilingüe (español, inglés y quechua).
+API REST de la plataforma educativa KawsayMath — gestiona **autenticación** (email + Google OAuth), **lecciones**, **evaluaciones**, **exámenes con anti-trampa**, **progreso estudiantil**, **reportes** (PDF/Excel), **chat IA** (Profesor Euler), **notificaciones push** (FCM) y **administración** (usuarios, config, backups). Trilingüe (español, inglés y quechua).
 
 ---
 
@@ -40,7 +40,7 @@ php artisan serve         # http://localhost:8000
 php artisan serve          # Servidor de desarrollo
 php artisan migrate --seed # Migraciones + datos demo
 php artisan test           # Suite de tests (Feature + Unit)
-php artisan mathflow:create-admin # Crear usuario administrador (CLI)
+php artisan kawsaymath:create-admin # Crear usuario administrador (CLI)
 php artisan schedule:run    # Tareas programadas (prune tokens, limpieza)
 ```
 
@@ -50,7 +50,7 @@ php artisan schedule:run    # Tareas programadas (prune tokens, limpieza)
 
 | Variable | Descripción | Default |
 |----------|-------------|---------|
-| `APP_NAME` | Nombre de la aplicación | `MathFlow` |
+| `APP_NAME` | Nombre de la aplicación | `KawsayMath` |
 | `APP_ENV` | Entorno (`local` / `production`) | `local` |
 | `APP_KEY` | Clave de encriptación (generar con `key:generate`) | — |
 | `APP_DEBUG` | Muestra detalles de error (`false` en producción) | `true` |
@@ -131,7 +131,7 @@ backend-app-mat/
 
 | Archivo | Qué hace |
 |---------|----------|
-| `CreateAdminUser.php` | Comando `php artisan mathflow:create-admin` — crea (o actualiza) interactivamente un usuario admin con `--email`, `--name` y `--password`. |
+| `CreateAdminUser.php` | Comando `php artisan kawsaymath:create-admin` — crea (o actualiza) interactivamente un usuario admin con `--email`, `--name` y `--password`. |
 
 ### `app/Exports/` — Exportaciones de reportes
 
@@ -333,7 +333,7 @@ Los tres archivos son estructuralmente paralelos (auth, mensajes de validación,
 | Archivo | Qué hace |
 |---------|----------|
 | `welcome.blade.php` | Página de bienvenida de Laravel (ruta `/`). |
-| `reports/report-pdf.blade.php` | **Vista del reporte PDF** usada por dompdf: encabezado MathFlow, tarjetas de resumen (promedio /20, máximo, mínimo, total, calificación literal AD/A/B/C) y tabla de resultados por estudiante×evaluación. |
+| `reports/report-pdf.blade.php` | **Vista del reporte PDF** usada por dompdf: encabezado KawsayMath, tarjetas de resumen (promedio /20, máximo, mínimo, total, calificación literal AD/A/B/C) y tabla de resultados por estudiante×evaluación. |
 
 ### `routes/`
 

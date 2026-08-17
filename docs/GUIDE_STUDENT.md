@@ -1,10 +1,10 @@
-# MathFlow — Guía Rápida para Estudiantes
+# KawsayMath — Guía Rápida para Estudiantes
 
 ---
 
 ## Cómo Registrarse
 
-1. Abre MathFlow en tu navegador.
+1. Abre KawsayMath en tu navegador.
 2. Haz clic en **Registrarse**.
 3. Completa:
    - **Nombre completo**

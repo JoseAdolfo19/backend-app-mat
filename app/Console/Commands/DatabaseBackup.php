@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 class DatabaseBackup extends Command
 {
-    protected $signature = 'mathflow:backup
+    protected $signature = 'kawsaymath:backup
         {--prune : Elimina respaldos viejos (conserva el más reciente de cada día)}';
 
     protected $description = 'Genera un respaldo de la base de datos MySQL';
@@ -35,7 +35,8 @@ class DatabaseBackup extends Command
         $password = $dbConfig['password'];
 
         $cmd = sprintf(
-            'mysqldump --host=%s --port=%s --user=%s %s > %s 2>&1',
+            '%s --host=%s --port=%s --user=%s %s > %s 2>&1',
+            escapeshellarg($this->resolveMysqldumpBinary()),
             escapeshellarg($host),
             escapeshellarg($port),
             escapeshellarg($username),
@@ -43,13 +44,18 @@ class DatabaseBackup extends Command
             escapeshellarg($backupPath . '/' . $filename)
         );
 
-        $env = array_merge($_ENV ?? [], [
-            'MYSQL_PWD' => $password,
-        ]);
+        $oldPwd = getenv('MYSQL_PWD');
+        putenv('MYSQL_PWD=' . $password);
 
         $output = [];
         $returnCode = 0;
-        exec($cmd, $output, $returnCode, $env);
+        exec($cmd, $output, $returnCode);
+
+        if ($oldPwd === false) {
+            putenv('MYSQL_PWD');
+        } else {
+            putenv('MYSQL_PWD=' . $oldPwd);
+        }
 
         if ($returnCode !== 0) {
             report('Backup failed: ' . implode("\n", $output));
@@ -96,5 +102,19 @@ class DatabaseBackup extends Command
                 $this->info("Respaldo viejo eliminado: " . basename($file));
             }
         }
+    }
+
+    private function resolveMysqldumpBinary(): string
+    {
+        $binaryPath = config('database.connections.mysql.dump.dump_binary_path', '');
+        $binary = trim((string) $binaryPath) !== ''
+            ? rtrim($binaryPath, '\\/') . DIRECTORY_SEPARATOR . 'mysqldump'
+            : 'mysqldump';
+
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $binary .= '.exe';
+        }
+
+        return $binary;
     }
 }

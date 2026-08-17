@@ -24,7 +24,7 @@ return [
     'verification_code_sent' => 'Verification code sent',
     'code_invalid_or_expired' => 'Invalid or expired code',
     'email_verified_success' => 'Email verified successfully',
-    'verification_email_subject' => 'Verify your email - MathFlow',
+    'verification_email_subject' => 'Verify your email - KawsayMath',
     'verification_email_body' => "Your verification code is: :code\n\nThis code expires in 10 minutes.",
 
     // Admin
@@ -164,7 +164,7 @@ return [
     // Web Push
     'push_subscribed' => 'Notifications subscription enabled',
     'push_unsubscribed' => 'Notifications subscription disabled',
-    'push_test_title' => 'MathFlow Test',
+    'push_test_title' => 'KawsayMath Test',
     'push_test_body' => 'Your push notifications are working!',
     'push_test_sent' => 'Test notification sent',
 

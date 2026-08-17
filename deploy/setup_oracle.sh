@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================
-# MathFlow - Script de instalacion para Oracle Cloud Free Tier
+# KawsayMath - Script de instalacion para Oracle Cloud Free Tier
 # Sistemas soportados: Oracle Linux 8/9, Ubuntu 22.04/24.04
 #
 # Uso: sudo bash setup_oracle.sh

@@ -1,6 +1,6 @@
-# MathFlow — Quick Start / Guía Rápida
+# KawsayMath — Quick Start / Guía Rápida
 
-> Guía de instalación y configuración del backend de MathFlow.
+> Guía de instalación y configuración del backend de KawsayMath.
 
 ---
 
@@ -75,7 +75,7 @@ Edita el archivo `.env` con la siguiente configuración:
 
 ```env
 # App
-APP_NAME=MathFlow
+APP_NAME=KawsayMath
 APP_ENV=local
 APP_KEY=
 APP_URL=http://localhost:8000

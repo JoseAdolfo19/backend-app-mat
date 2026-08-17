@@ -714,7 +714,7 @@ class ReportController extends Controller
         </style></head>
         <body>
             <div class="header">
-                <h1>MathFlow - Reporte de Rendimiento</h1>
+                <h1>KawsayMath - Reporte de Rendimiento</h1>
                 <p>Generado: ' . now()->format('d/m/Y H:i') . '</p>
             </div>
             <div class="summary">
@@ -852,7 +852,7 @@ class ReportController extends Controller
         </style></head>
         <body>
             <div class="header">
-                <h1>MathFlow - Reporte del Estudiante</h1>
+                <h1>KawsayMath - Reporte del Estudiante</h1>
                 <p>Generado: ' . now()->format('d/m/Y H:i') . '</p>
             </div>
             <div class="student-info">
@@ -915,7 +915,7 @@ class ReportController extends Controller
         </style></head>
         <body>
             <div class="header">
-                <h1>MathFlow - Calificaciones</h1>
+                <h1>KawsayMath - Calificaciones</h1>
                 <p>Generado: ' . now()->format('d/m/Y H:i') . '</p>
             </div>
             <div class="stats-grid">

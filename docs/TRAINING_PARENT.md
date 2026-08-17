@@ -1,4 +1,4 @@
-# MathFlow — Programa de Capacitación para Padres de Familia
+# KawsayMath — Programa de Capacitación para Padres de Familia
 
 ---
 
@@ -21,13 +21,13 @@ Al finalizar este programa, el padre de familia será capaz de:
 
 ### Temas
 
-1. Iniciar sesión en MathFlow.
+1. Iniciar sesión en KawsayMath.
 2. Conocer el panel principal.
 3. Cerrar sesión de forma segura.
 
 ### Práctica
 
-1. Abre la aplicación MathFlow en tu navegador.
+1. Abre la aplicación KawsayMath en tu navegador.
 2. Ingresa tu correo y contraseña.
 3. Haz clic en **Iniciar Sesión**.
 4. Verás la lista de tus hijos registrados.
@@ -191,7 +191,7 @@ Contacta al administrador para que vincule la cuenta de tu hijo a la tuya.
 Se recomienda al menos una vez por semana para mantener el seguimiento.
 
 **¿Puedo acceder desde el celular?**
-Sí, MathFlow es responsive y funciona desde cualquier dispositivo.
+Sí, KawsayMath es responsive y funciona desde cualquier dispositivo.
 
 **¿Puedo comunicarme directamente con el docente?**
 La plataforma no incluye mensajería directa, pero puedes usar los datos del reporte para comunicarte por otros medios (correo, reuniones presenciales).

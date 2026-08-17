@@ -81,7 +81,7 @@ class TestDataSeeder extends Seeder
                 'role_id' => $teacherRole->id,
                 'is_active' => true,
                 'provider' => 'email',
-                'institution' => 'Instituto MathFlow',
+                'institution' => 'Instituto KawsayMath',
                 'email_verified_at' => now(),
             ]);
 
@@ -126,7 +126,7 @@ class TestDataSeeder extends Seeder
                 'role_id' => $studentRole->id,
                 'is_active' => true,
                 'provider' => 'email',
-                'institution' => 'Instituto MathFlow',
+                'institution' => 'Instituto KawsayMath',
                 'grade' => $data['grade'],
                 'email_verified_at' => now(),
             ]);
@@ -937,7 +937,7 @@ class TestDataSeeder extends Seeder
         $count = 0;
 
         $notificationsData = [
-            ['title' => 'Bienvenido a MathFlow', 'message' => 'Tu cuenta ha sido creada exitosamente. Explora nuestras lecciones de matematicas.', 'type' => Notification::TYPE_SUCCESS],
+            ['title' => 'Bienvenido a KawsayMath', 'message' => 'Tu cuenta ha sido creada exitosamente. Explora nuestras lecciones de matematicas.', 'type' => Notification::TYPE_SUCCESS],
             ['title' => 'Nueva leccion disponible', 'message' => 'Se ha publicado una nueva leccion de Algebra: Ecuaciones Lineales.', 'type' => Notification::TYPE_INFO],
             ['title' => 'Recordatorio de evaluacion', 'message' => 'Tienes una evaluacion pendiente que vence en 3 dias. No olvides completarla.', 'type' => Notification::TYPE_WARNING],
             ['title' => 'Calificacion publicada', 'message' => 'Tu profesor ha calificado tu ultimo examen. Revisa tu resultado.', 'type' => Notification::TYPE_INFO],
@@ -975,7 +975,7 @@ class TestDataSeeder extends Seeder
     {
         InstitutionConfig::create([
             'id' => Str::uuid(),
-            'institution_name' => 'Instituto MathFlow Education',
+            'institution_name' => 'Instituto KawsayMath Education',
             'primary_color' => '#004AC6',
             'secondary_color' => '#006C49',
             'logo' => null,

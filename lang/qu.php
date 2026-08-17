@@ -24,7 +24,7 @@ return [
     'verification_code_sent' => 'Riqsichiy código chakusqan',
     'code_invalid_or_expired' => 'Mana riqsichiy código ña waktapuk',
     'email_verified_success' => 'Mail riqsichiy tukuy',
-    'verification_email_subject' => 'Mail riqsichiy - MathFlow',
+    'verification_email_subject' => 'Mail riqsichiy - KawsayMath',
     'verification_email_body' => "Riqsichiy código kay :code\n\nKay código 10 minutos pachapi wanalla.",
 
     // Admin
@@ -164,7 +164,7 @@ return [
     // Web Push
     'push_subscribed' => 'Notificaciones suscripcion allichasqa',
     'push_unsubscribed' => 'Notificaciones suscripcion pichasqa',
-    'push_test_title' => 'MathFlow Yachana',
+    'push_test_title' => 'KawsayMath Yachana',
     'push_test_body' => '¡Notificacionespush kawsanmi!',
     'push_test_sent' => 'Yachana notificacion apachisqa',
 

@@ -18,4 +18,4 @@ Schedule::call(function () {
 })->daily()->at('02:30');
 
 // Respaldo automático de la base de datos (diario) + limpieza de respaldos viejos
-Schedule::command('mathflow:backup --prune')->daily()->at('03:00');
+Schedule::command('kawsaymath:backup --prune')->daily()->at('03:00');

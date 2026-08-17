@@ -1,8 +1,8 @@
-# MathFlow — Manual del Padre de Familia
+# KawsayMath — Manual del Padre de Familia
 
 ## 1. Inicio de Sesión
 
-1. Abre la aplicación MathFlow en tu navegador o dispositivo móvil.
+1. Abre la aplicación KawsayMath en tu navegador o dispositivo móvil.
 2. Ingresa tu correo electrónico y contraseña.
 3. Haz clic en **Iniciar Sesión**.
 4. Serás redirigido al panel principal donde verás tus hijos registrados.

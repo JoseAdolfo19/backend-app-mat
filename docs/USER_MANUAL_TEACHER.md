@@ -1,8 +1,8 @@
-# MathFlow — Manual del Docente
+# KawsayMath — Manual del Docente
 
 ## 1. Inicio de Sesión
 
-1. Abre la aplicación MathFlow.
+1. Abre la aplicación KawsayMath.
 2. Ingresa tu correo electrónico y contraseña.
 3. Haz clic en **Iniciar Sesión**.
 4. Serás redirigido al **Dashboard Docente**.

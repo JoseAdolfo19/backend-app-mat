@@ -1,4 +1,4 @@
-# MathFlow — Programa de Capacitación para Docentes
+# KawsayMath — Programa de Capacitación para Docentes
 
 ---
 
@@ -232,7 +232,7 @@ Cuando al menos 3 estudiantes completen la evaluación:
 
 ## Certificación
 
-Para obtener la certificación de MathFlow como docente, debes completar:
+Para obtener la certificación de KawsayMath como docente, debes completar:
 
 1. Los 5 módulos de capacitación.
 2. Los 3 ejercicios prácticos.

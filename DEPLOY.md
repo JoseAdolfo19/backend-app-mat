@@ -1,4 +1,4 @@
-# MathFlow — Deployment Guide
+# KawsayMath — Deployment Guide
 
 ## Despliegue en Oracle Cloud Free Tier (gratis para siempre)
 
@@ -67,7 +67,7 @@ php artisan db:seed --class=RolesSeeder
 php artisan db:seed --class=AdminUserSeeder
 
 # 7. Crear admin desde CLI (opcional)
-php artisan mathflow:create-admin --email=admin@mathflow.com --name="Admin" --password=your-secure-password
+php artisan kawsaymath:create-admin --email=admin@mathflow.com --name="Admin" --password=your-secure-password
 
 # 8. Optimizar para producción
 php artisan config:cache

@@ -379,10 +379,13 @@ Route::prefix('v1')->group(function () {
             Route::prefix('users')->group(function () {
                 Route::get('/', [AdminController::class, 'getUsers'])
                     ->middleware('cache.api');
-                Route::get('/{id}', [AdminController::class, 'getUser'])
-                    ->middleware('cache.api');
                 Route::post('/', [AdminController::class, 'createUser'])
                     ->middleware('audit');
+                Route::post('/import', [AdminController::class, 'importUsers'])
+                    ->middleware(['audit', 'throttle:5,1']);
+                Route::get('/export', [AdminController::class, 'exportUsers']);
+                Route::get('/{id}', [AdminController::class, 'getUser'])
+                    ->middleware('cache.api');
                 Route::put('/{id}', [AdminController::class, 'updateUser'])
                     ->middleware('audit');
                 Route::delete('/{id}', [AdminController::class, 'deleteUser'])
@@ -391,9 +394,6 @@ Route::prefix('v1')->group(function () {
                     ->middleware('audit');
                 Route::post('/{id}/deactivate', [AdminController::class, 'deactivateUser'])
                     ->middleware('audit');
-                Route::post('/import', [AdminController::class, 'importUsers'])
-                    ->middleware(['audit', 'throttle:5,1']);
-                Route::get('/export', [AdminController::class, 'exportUsers']);
             });
             
             Route::prefix('config')->group(function () {
@@ -571,7 +571,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/health', function () {
         return response()->json([
             'status' => 'healthy',
-            'message' => 'MathFlow API is running',
+            'message' => 'KawsayMath API is running',
             'version' => 'v1',
             'timestamp' => now()
         ]);

@@ -229,7 +229,7 @@ class AdminController extends Controller
 
         if (!$config) {
             return response()->json([
-                'institution_name' => 'MathFlow Education',
+                'institution_name' => 'KawsayMath Education',
                 'primary_color' => '#004AC6',
                 'secondary_color' => '#006C49',
             ]);
@@ -242,7 +242,7 @@ class AdminController extends Controller
     {
         $config = InstitutionConfig::first() ?? InstitutionConfig::create([
             'id' => Str::uuid(),
-            'institution_name' => 'MathFlow Education'
+            'institution_name' => 'KawsayMath Education'
         ]);
 
         $validated = $request->validate([
@@ -499,7 +499,8 @@ class AdminController extends Controller
         $password = $dbConfig['password'];
 
         $cmd = sprintf(
-            'mysqldump --host=%s --port=%s --user=%s %s > %s 2>&1',
+            '%s --host=%s --port=%s --user=%s %s > %s 2>&1',
+            escapeshellarg($this->resolveMysqldumpBinary()),
             escapeshellarg($host),
             escapeshellarg($port),
             escapeshellarg($username),
@@ -507,13 +508,18 @@ class AdminController extends Controller
             escapeshellarg($backupPath . '/' . $filename)
         );
 
-        $env = array_merge($_ENV ?? [], [
-            'MYSQL_PWD' => $password,
-        ]);
+        $oldPwd = getenv('MYSQL_PWD');
+        putenv('MYSQL_PWD=' . $password);
 
         $output = [];
         $returnCode = 0;
-        exec($cmd, $output, $returnCode, $env);
+        exec($cmd, $output, $returnCode);
+
+        if ($oldPwd === false) {
+            putenv('MYSQL_PWD');
+        } else {
+            putenv('MYSQL_PWD=' . $oldPwd);
+        }
 
         if ($returnCode !== 0) {
             report('Backup failed: ' . implode("\n", $output));
@@ -606,5 +612,19 @@ class AdminController extends Controller
             }
         }
         return $value;
+    }
+
+    private function resolveMysqldumpBinary(): string
+    {
+        $binaryPath = config('database.connections.mysql.dump.dump_binary_path', '');
+        $binary = trim((string) $binaryPath) !== ''
+            ? rtrim($binaryPath, '\\/') . DIRECTORY_SEPARATOR . 'mysqldump'
+            : 'mysqldump';
+
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $binary .= '.exe';
+        }
+
+        return $binary;
     }
 }

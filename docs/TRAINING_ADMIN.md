@@ -1,4 +1,4 @@
-# MathFlow — Programa de Capacitación para Administradores
+# KawsayMath — Programa de Capacitación para Administradores
 
 ---
 

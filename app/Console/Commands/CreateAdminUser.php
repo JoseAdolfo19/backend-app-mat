@@ -11,12 +11,12 @@ use Illuminate\Support\Str;
 
 class CreateAdminUser extends Command
 {
-    protected $signature = 'mathflow:create-admin
+    protected $signature = 'kawsaymath:create-admin
         {--email= : Email del administrador}
         {--name= : Nombre completo}
         {--password= : Contraseña (si no se provee, se genera una aleatoria)}';
 
-    protected $description = 'Crear un usuario administrador para MathFlow';
+    protected $description = 'Crear un usuario administrador para KawsayMath';
 
     public function handle(): int
     {

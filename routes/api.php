@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ForumController;
 use App\Http\Controllers\Api\SalonController;
+use App\Http\Controllers\Api\GameController;
 
 /*
 |--------------------------------------------------------------------------
@@ -533,10 +534,21 @@ Route::prefix('v1')->group(function () {
         Route::get('/{courseId}/students', [SalonController::class, 'courseStudents']);
         Route::get('/{courseId}', [SalonController::class, 'studentCourseDetail']);
     });
+
+    // JUEGOS DIDÁCTICOS (Quizizz/Kahoot) + comprobante de puntaje
+    Route::prefix('games')->middleware(['throttle:60,1'])->group(function () {
+        Route::get('/', [GameController::class, 'index']);
+        Route::post('/', [GameController::class, 'store']);
+        Route::get('/teacher-courses', [GameController::class, 'teacherCourses']);
+        Route::get('/{gameId}', [GameController::class, 'show']);
+        Route::put('/{gameId}', [GameController::class, 'update']);
+        Route::delete('/{gameId}', [GameController::class, 'destroy']);
+        Route::post('/{gameId}/screenshot', [GameController::class, 'uploadScreenshot']);
+        Route::post('/{gameId}/submit', [GameController::class, 'submit']);
+        Route::post('/submissions/{submissionId}/grade', [GameController::class, 'grade']);
+    });
     });
 
-    // ============================================================
-    // GUEST STUDENT LOOKUP (Público)
     // ============================================================
 
     Route::post('/guest/student-lookup', [GuestStudentController::class, 'lookup'])->middleware('throttle:5,1');

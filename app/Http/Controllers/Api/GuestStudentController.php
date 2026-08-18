@@ -19,7 +19,7 @@ class GuestStudentController extends Controller
     public function lookup(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'dni' => 'required|string|size:8|digits',
+            'dni' => 'required|string|size:8|digits:8',
             'captcha_token' => 'required|string',
             'captcha_answer' => 'required|string',
         ]);

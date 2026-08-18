@@ -41,7 +41,7 @@ class AdminController extends Controller
         }
 
         $users = $query->orderBy('created_at', 'desc')
-            ->paginate(min((int) ($request->per_page ?? 20), 50));
+            ->paginate(min((int) ($request->per_page ?? 20), 1000));
 
         return response()->json($users);
     }
@@ -249,6 +249,9 @@ class AdminController extends Controller
             'institution_name' => 'sometimes|string|max:255',
             'primary_color' => 'sometimes|string|max:7',
             'secondary_color' => 'sometimes|string|max:7',
+            'tertiary_color' => 'sometimes|string|max:7',
+            'background_color' => 'sometimes|string|max:7',
+            'surface_color' => 'sometimes|string|max:7',
             'logo' => 'nullable|string',
             'email_notifications' => 'nullable|array',
             'backup_frequency' => 'nullable|string'

@@ -63,7 +63,7 @@ class ForumController extends Controller
     public function store(Request $request)
     {
         $user = Auth::user();
-        if (!in_array($user->role?->name, ['teacher', 'coordinador', 'director'])) {
+        if (!in_array($user->role?->name, ['teacher', 'coordinador', 'director', 'admin'])) {
             return response()->json(['message' => 'Solo docentes pueden crear hilos'], 403);
         }
 

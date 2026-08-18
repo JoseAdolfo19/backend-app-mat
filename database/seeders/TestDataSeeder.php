@@ -37,6 +37,7 @@ class TestDataSeeder extends Seeder
         $this->createQuestions();
         $this->createLessonProgress();
         $this->createEvaluationResults();
+        $this->refreshStudentProfiles();
         $this->createAcademicPeriods();
         $this->createNotifications();
         $this->createInstitutionConfig();
@@ -73,26 +74,30 @@ class TestDataSeeder extends Seeder
         ];
 
         foreach ($teachersData as $data) {
-            $teacher = User::create([
-                'id' => Str::uuid(),
-                'full_name' => $data['full_name'],
-                'email' => $data['email'],
-                'password' => 'password123',
-                'role_id' => $teacherRole->id,
-                'is_active' => true,
-                'provider' => 'email',
-                'institution' => 'Instituto KawsayMath',
-                'email_verified_at' => now(),
-            ]);
+            $teacher = User::where('email', $data['email'])->first();
 
-            TeacherProfile::create([
-                'id' => Str::uuid(),
-                'user_id' => $teacher->id,
-                'department' => $data['department'],
-                'specialization' => $data['specialization'],
-                'years_experience' => $data['years_experience'],
-                'students_count' => 0,
-            ]);
+            if (!$teacher) {
+                $teacher = User::create([
+                    'id' => Str::uuid(),
+                    'full_name' => $data['full_name'],
+                    'email' => $data['email'],
+                    'password' => 'password123',
+                    'role_id' => $teacherRole->id,
+                    'is_active' => true,
+                    'provider' => 'email',
+                    'institution' => 'Instituto KawsayMath',
+                    'email_verified_at' => now(),
+                ]);
+
+                TeacherProfile::create([
+                    'id' => Str::uuid(),
+                    'user_id' => $teacher->id,
+                    'department' => $data['department'],
+                    'specialization' => $data['specialization'],
+                    'years_experience' => $data['years_experience'],
+                    'students_count' => 0,
+                ]);
+            }
 
             $this->teachers[] = $teacher;
         }
@@ -118,29 +123,34 @@ class TestDataSeeder extends Seeder
         ];
 
         foreach ($studentsData as $i => $data) {
-            $student = User::create([
-                'id' => Str::uuid(),
-                'full_name' => $data['full_name'],
-                'email' => 'estudiante' . ($i + 1) . '@mathflow.com',
-                'password' => 'password123',
-                'role_id' => $studentRole->id,
-                'is_active' => true,
-                'provider' => 'email',
-                'institution' => 'Instituto KawsayMath',
-                'grade' => $data['grade'],
-                'email_verified_at' => now(),
-            ]);
+            $email = 'estudiante' . ($i + 1) . '@mathflow.com';
+            $student = User::where('email', $email)->first();
 
-            StudentProfile::create([
-                'id' => Str::uuid(),
-                'user_id' => $student->id,
-                'academic_level' => $data['academic_level'],
-                'total_lessons_completed' => 0,
-                'average_score' => 0,
-                'total_time_spent' => 0,
-                'current_streak' => rand(0, 15),
-                'badges' => [],
-            ]);
+            if (!$student) {
+                $student = User::create([
+                    'id' => Str::uuid(),
+                    'full_name' => $data['full_name'],
+                    'email' => $email,
+                    'password' => 'password123',
+                    'role_id' => $studentRole->id,
+                    'is_active' => true,
+                    'provider' => 'email',
+                    'institution' => 'Instituto KawsayMath',
+                    'grade' => $data['grade'],
+                    'email_verified_at' => now(),
+                ]);
+
+                StudentProfile::create([
+                    'id' => Str::uuid(),
+                    'user_id' => $student->id,
+                    'academic_level' => $data['academic_level'],
+                    'total_lessons_completed' => 0,
+                    'average_score' => 0,
+                    'total_time_spent' => 0,
+                    'current_streak' => 0,
+                    'badges' => [],
+                ]);
+            }
 
             $this->students[] = $student;
         }
@@ -906,6 +916,59 @@ class TestDataSeeder extends Seeder
         }
 
         return 'respuesta incorrecta';
+    }
+
+    private function refreshStudentProfiles(): void
+    {
+        $count = 0;
+        foreach ($this->students as $student) {
+            $completedLessons = LessonProgress::where('user_id', $student->id)
+                ->where('status', LessonProgress::STATUS_COMPLETED)
+                ->count();
+
+            $avgScore = EvaluationResult::where('user_id', $student->id)
+                ->where('status', EvaluationResult::STATUS_COMPLETED)
+                ->avg('score');
+
+            $activityDates = LessonProgress::where('user_id', $student->id)
+                ->whereNotNull('completed_at')
+                ->pluck('completed_at')
+                ->merge(
+                    EvaluationResult::where('user_id', $student->id)
+                        ->where('status', EvaluationResult::STATUS_COMPLETED)
+                        ->whereNotNull('completed_at')
+                        ->pluck('completed_at')
+                );
+
+            $streak = 0;
+            if ($activityDates->isNotEmpty()) {
+                $days = $activityDates
+                    ->map(fn ($d) => \Carbon\Carbon::parse($d)->toDateString())
+                    ->unique()
+                    ->sortDesc()
+                    ->values();
+                $streak = 1;
+                $previous = \Carbon\Carbon::parse($days[0]);
+                for ($i = 1; $i < $days->count(); $i++) {
+                    $current = \Carbon\Carbon::parse($days[$i]);
+                    if ($previous->copy()->subDay()->eq($current)) {
+                        $streak++;
+                        $previous = $current;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            StudentProfile::where('user_id', $student->id)->update([
+                'total_lessons_completed' => $completedLessons,
+                'average_score' => round((float) $avgScore, 1),
+                'current_streak' => $streak,
+            ]);
+            $count++;
+        }
+
+        $this->command->info("  {$count} perfiles de estudiantes actualizados con datos reales");
     }
 
     private function createAcademicPeriods(): void

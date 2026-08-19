@@ -98,6 +98,7 @@ return [
     'evaluation_submit_error' => 'Sutiykay rurarqan mana',
     'evaluation_no_permission_view_results' => 'Mana kay resultado rikuyta atinchik',
     'evaluation_no_permission_view_result' => 'Mana kay resultado rikuyta atinchik',
+    'work_grade_forbidden' => 'Mana kay trabajota califichayta atinchik',
     'evaluation_result_not_found' => 'Resultado kanman',
     'evaluation_no_permission_duplicate' => 'Mana kay sutiykay tuplichayta atinchik',
     'evaluation_copy_suffix' => ' (Copia)',

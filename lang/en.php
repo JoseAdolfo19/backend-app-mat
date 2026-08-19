@@ -98,6 +98,7 @@ return [
     'evaluation_submit_error' => 'Error submitting evaluation',
     'evaluation_no_permission_view_results' => 'You do not have permission to view these results',
     'evaluation_no_permission_view_result' => 'You do not have permission to view this result',
+    'work_grade_forbidden' => 'You do not have permission to grade this work',
     'evaluation_result_not_found' => 'Result not found',
     'evaluation_no_permission_duplicate' => 'You do not have permission to duplicate this evaluation',
     'evaluation_copy_suffix' => ' (Copy)',

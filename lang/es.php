@@ -98,6 +98,7 @@ return [
     'evaluation_submit_error' => 'Error al enviar la evaluación',
     'evaluation_no_permission_view_results' => 'No tienes permiso para ver estos resultados',
     'evaluation_no_permission_view_result' => 'No tienes permiso para ver este resultado',
+    'work_grade_forbidden' => 'No tienes permiso para calificar este trabajo',
     'evaluation_result_not_found' => 'Resultado no encontrado',
     'evaluation_no_permission_duplicate' => 'No tienes permiso para duplicar esta evaluación',
     'evaluation_copy_suffix' => ' (Copia)',

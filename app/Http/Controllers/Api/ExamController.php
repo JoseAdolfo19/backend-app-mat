@@ -17,7 +17,7 @@ class ExamController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Exam::with(['teacher', 'questions']);
+        $query = Exam::with(['teacher']);
 
         if (Auth::user()->isTeacher() || Auth::user()->isAdmin()) {
             if (!Auth::user()->isAdmin()) {
@@ -49,22 +49,21 @@ class ExamController extends Controller
             });
         }
 
-        if (Auth::user()->isStudent() || Auth::user()->isParent()) {
-            foreach ($query->get() as $exam) {
-                foreach ($exam->questions as $question) {
-                    $question->makeHidden(['correct_answer']);
-                }
-                if (Auth::user()->isStudent()) {
-                    $attempt = ExamAttempt::where('student_id', Auth::id())
-                        ->where('exam_id', $exam->id)
-                        ->first();
-                    $exam->user_attempt = $attempt;
-                }
-            }
-        }
-
         $exams = $query->orderBy('created_at', 'desc')
             ->paginate(min((int) ($request->per_page ?? 15), 50));
+
+        // Calcular el intento del estudiante con una sola query (evita N+1 y fuga de correct_answer)
+        if (Auth::user()->isStudent()) {
+            $attempts = ExamAttempt::where('student_id', Auth::id())
+                ->whereIn('exam_id', $exams->pluck('id'))
+                ->get()
+                ->keyBy('exam_id');
+
+            $exams->getCollection()->transform(function ($exam) use ($attempts) {
+                $exam->user_attempt = $attempts->get($exam->id);
+                return $exam;
+            });
+        }
 
         return response()->json([
             'success' => true,

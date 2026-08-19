@@ -175,6 +175,11 @@ class SubmittedWorkController extends Controller
 
         $work = SubmittedWork::findOrFail($id);
 
+        $user = Auth::user();
+        if (!$this->teacherCanGrade($user, $work)) {
+            return response()->json(['message' => __('work_grade_forbidden')], 403);
+        }
+
         $work->update([
             'score' => $request->score,
             'teacher_feedback' => $request->feedback ?? $work->teacher_feedback,
@@ -196,12 +201,46 @@ class SubmittedWorkController extends Controller
 
         $work = SubmittedWork::findOrFail($id);
 
+        $user = Auth::user();
+        if (!$this->teacherCanGrade($user, $work)) {
+            return response()->json(['message' => __('work_grade_forbidden')], 403);
+        }
+
         $work->update([
             'teacher_feedback' => $request->feedback,
             'status' => 'returned',
         ]);
 
         return response()->json(['data' => $work->fresh()->load(['student', 'lesson', 'evaluation', 'exam'])]);
+    }
+
+    /**
+     * Verifica que el docente autenticado sea propietario (o admin) del trabajo.
+     * El trabajo pertenece a una evaluación/lección/examen del docente.
+     */
+    private function teacherCanGrade($user, $work)
+    {
+        if ($user->isAdmin()) {
+            return true;
+        }
+        if (!$user->isTeacher()) {
+            return false;
+        }
+
+        if ($work->evaluation_id) {
+            return Evaluation::where('id', $work->evaluation_id)
+                ->where('teacher_id', $user->id)->exists();
+        }
+        if ($work->lesson_id) {
+            return \App\Models\Lesson::where('id', $work->lesson_id)
+                ->where('teacher_id', $user->id)->exists();
+        }
+        if ($work->exam_id) {
+            return \App\Models\Exam::where('id', $work->exam_id)
+                ->where('teacher_id', $user->id)->exists();
+        }
+
+        return false;
     }
 
     /**

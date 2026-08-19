@@ -214,6 +214,12 @@ class AdminController extends Controller
         }
 
         $user->update(['is_active' => false]);
+
+        // Revocar todos los tokens del usuario desactivado
+        if (method_exists($user, 'tokens')) {
+            $user->tokens()->delete();
+        }
+
         $user->logAudit('user.admin_deactivated', ['is_active' => true], ['is_active' => false]);
 
         return response()->json([

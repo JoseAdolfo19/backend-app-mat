@@ -395,45 +395,44 @@ class ExamController extends Controller
 
         $studentId = Auth::id();
 
-        $existingAttempt = ExamAttempt::where('exam_id', $id)
-            ->where('student_id', $studentId)
-            ->where('status', ExamAttempt::STATUS_IN_PROGRESS)
-            ->first();
+        // Transacción con lock FOR UPDATE sobre el examen: serializa intentos simultáneos
+        // para evitar duplicar intentos en curso o saltarse max_attempts.
+        $result = \DB::transaction(function () use ($exam, $studentId, $id) {
+            $lockedExam = Exam::whereKey($exam->id)->lockForUpdate()->first();
 
-        if ($existingAttempt) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Retomando intento en curso',
-                'data' => [
-                    'attempt' => $existingAttempt,
-                    'questions' => $exam->questions()->orderBy('order')->get()->map(function ($q) {
-                        $q->makeHidden(['correct_answer']);
-                        return $q;
-                    }),
-                ]
-            ]);
-        }
+            $existingAttempt = ExamAttempt::where('exam_id', $id)
+                ->where('student_id', $studentId)
+                ->where('status', ExamAttempt::STATUS_IN_PROGRESS)
+                ->first();
 
-        $completedAttempts = ExamAttempt::where('exam_id', $id)
-            ->where('student_id', $studentId)
-            ->where('status', ExamAttempt::STATUS_COMPLETED)
-            ->count();
+            if ($existingAttempt) {
+                return ['attempt' => $existingAttempt, 'resumed' => true];
+            }
 
-        if ($completedAttempts >= $exam->max_attempts) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ha alcanzado el número máximo de intentos para este examen'
-            ], 403);
-        }
+            $completedAttempts = ExamAttempt::where('exam_id', $id)
+                ->where('student_id', $studentId)
+                ->where('status', ExamAttempt::STATUS_COMPLETED)
+                ->count();
 
-        $attempt = ExamAttempt::create([
-            'id' => Str::uuid(),
-            'exam_id' => $exam->id,
-            'student_id' => $studentId,
-            'status' => ExamAttempt::STATUS_IN_PROGRESS,
-            'total_points' => $exam->total_points,
-            'started_at' => now(),
-        ]);
+            if ($completedAttempts >= $lockedExam->max_attempts) {
+                return ['attempt' => null, 'resumed' => false];
+            }
+
+            return [
+                'attempt' => ExamAttempt::create([
+                    'id' => Str::uuid(),
+                    'exam_id' => $lockedExam->id,
+                    'student_id' => $studentId,
+                    'status' => ExamAttempt::STATUS_IN_PROGRESS,
+                    'total_points' => $lockedExam->total_points,
+                    'started_at' => now(),
+                ]),
+                'resumed' => false,
+            ];
+        });
+
+        $attempt = $result['attempt'];
+        $resumed = $result['resumed'];
 
         $questions = $exam->questions()->orderBy('order')->get()->map(function ($q) {
             $q->makeHidden(['correct_answer']);
@@ -442,6 +441,26 @@ class ExamController extends Controller
 
         if ($exam->randomize_questions) {
             $questions = $questions->shuffle()->values();
+        }
+
+        // Caso A: se alcanzó el máximo de intentos
+        if (!$attempt) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ha alcanzado el número máximo de intentos para este examen'
+            ], 403);
+        }
+
+        // Caso B: se retomó un intento en curso existente
+        if ($resumed) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Retomando intento en curso',
+                'data' => [
+                    'attempt' => $attempt,
+                    'questions' => $questions,
+                ]
+            ]);
         }
 
         return response()->json([

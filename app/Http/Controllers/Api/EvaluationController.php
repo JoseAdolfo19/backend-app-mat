@@ -24,7 +24,7 @@ class EvaluationController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Evaluation::with(['teacher', 'lesson', 'results']);
+        $query = Evaluation::with(['teacher', 'lesson']);
 
         // Filtros
         if ($request->has('type') && $request->type) {
@@ -76,14 +76,17 @@ class EvaluationController extends Controller
         $evaluations = $query->orderBy('created_at', 'desc')
             ->paginate(min((int) ($request->per_page ?? 15), 50));
 
-        // Agregar información de resultados para estudiantes
+        // Agregar información de resultados para estudiantes (una sola query agrupada, evita N+1)
         if (Auth::user()->isStudent()) {
-            foreach ($evaluations as $evaluation) {
-                $result = EvaluationResult::where('user_id', Auth::id())
-                    ->where('evaluation_id', $evaluation->id)
-                    ->first();
-                $evaluation->user_result = $result;
-            }
+            $myResults = EvaluationResult::where('user_id', Auth::id())
+                ->whereIn('evaluation_id', $evaluations->pluck('id'))
+                ->get()
+                ->keyBy('evaluation_id');
+
+            $evaluations->getCollection()->transform(function ($evaluation) use ($myResults) {
+                $evaluation->user_result = $myResults->get($evaluation->id);
+                return $evaluation;
+            });
         }
 
         return response()->json([
@@ -436,20 +439,24 @@ class EvaluationController extends Controller
             ], 400);
         }
 
-        $question = Question::create([
-            'id' => Str::uuid(),
-            'evaluation_id' => $evaluationId,
-            'type' => $validated['type'],
-            'question_text' => $validated['question_text'],
-            'options' => $validated['options'] ?? null,
-            'correct_answer' => $validated['correct_answer'],
-            'explanation' => $validated['explanation'] ?? null,
-            'points' => $validated['points'] ?? 1,
-            'order' => $validated['order'] ?? 0
-        ]);
+        $question = \DB::transaction(function () use ($evaluationId, $validated) {
+            $question = Question::create([
+                'id' => Str::uuid(),
+                'evaluation_id' => $evaluationId,
+                'type' => $validated['type'],
+                'question_text' => $validated['question_text'],
+                'options' => $validated['options'] ?? null,
+                'correct_answer' => $validated['correct_answer'],
+                'explanation' => $validated['explanation'] ?? null,
+                'points' => $validated['points'] ?? 1,
+                'order' => $validated['order'] ?? 0
+            ]);
 
-        // Actualizar total de preguntas y puntos
-        $this->updateEvaluationTotals($evaluationId);
+            // Actualizar total de preguntas y puntos
+            $this->updateEvaluationTotals($evaluationId);
+
+            return $question;
+        });
 
         return response()->json([
             'success' => true,
@@ -485,10 +492,12 @@ class EvaluationController extends Controller
             'order' => 'nullable|integer|min:0'
         ]);
 
-        $question->update($validated);
+        \DB::transaction(function () use ($question, $validated, $evaluation) {
+            $question->update($validated);
 
-        // Actualizar total de preguntas y puntos
-        $this->updateEvaluationTotals($evaluation->id);
+            // Actualizar total de preguntas y puntos
+            $this->updateEvaluationTotals($evaluation->id);
+        });
 
         return response()->json([
             'success' => true,
@@ -512,10 +521,12 @@ class EvaluationController extends Controller
             ], 403);
         }
 
-        $question->delete();
+        \DB::transaction(function () use ($question, $evaluation) {
+            $question->delete();
 
-        // Actualizar total de preguntas y puntos
-        $this->updateEvaluationTotals($evaluation->id);
+            // Actualizar total de preguntas y puntos
+            $this->updateEvaluationTotals($evaluation->id);
+        });
 
         return response()->json([
             'success' => true,

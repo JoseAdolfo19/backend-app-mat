@@ -242,46 +242,51 @@ class ProgressController extends Controller
 
         $lesson = Lesson::findOrFail($lessonId);
 
-        $progress = LessonProgress::where('user_id', Auth::id())
-            ->where('lesson_id', $lessonId)
-            ->first();
+        $progress = \DB::transaction(function () use ($lessonId, $validated) {
+            $progress = LessonProgress::where('user_id', Auth::id())
+                ->where('lesson_id', $lessonId)
+                ->lockForUpdate()
+                ->first();
 
-        if (!$progress) {
-            $progress = LessonProgress::create([
-                'id' => Str::uuid(),
-                'user_id' => Auth::id(),
-                'lesson_id' => $lessonId,
-                'progress' => 0,
-                'status' => LessonProgress::STATUS_NOT_STARTED,
-                'time_spent' => 0,
-                'last_position' => 0
-            ]);
-        }
+            if (!$progress) {
+                $progress = LessonProgress::create([
+                    'id' => Str::uuid(),
+                    'user_id' => Auth::id(),
+                    'lesson_id' => $lessonId,
+                    'progress' => 0,
+                    'status' => LessonProgress::STATUS_NOT_STARTED,
+                    'time_spent' => 0,
+                    'last_position' => 0
+                ]);
+            }
 
-        $updateData = [
-            'progress' => $validated['progress']
-        ];
+            $updateData = [
+                'progress' => $validated['progress']
+            ];
 
-        if (isset($validated['time_spent'])) {
-            $updateData['time_spent'] = ($progress->time_spent ?? 0) + $validated['time_spent'];
-        }
+            if (isset($validated['time_spent'])) {
+                $updateData['time_spent'] = ($progress->time_spent ?? 0) + $validated['time_spent'];
+            }
 
-        if (isset($validated['last_position'])) {
-            $updateData['last_position'] = $validated['last_position'];
-        }
+            if (isset($validated['last_position'])) {
+                $updateData['last_position'] = $validated['last_position'];
+            }
 
-        // Actualizar estado según el progreso
-        if ($validated['progress'] >= 100) {
-            $updateData['status'] = LessonProgress::STATUS_COMPLETED;
-            $updateData['completed_at'] = now();
-            
-            // Actualizar perfil del estudiante
-            $this->updateStudentProfileOnCompletion($progress);
-        } elseif ($validated['progress'] > 0) {
-            $updateData['status'] = LessonProgress::STATUS_IN_PROGRESS;
-        }
+            // Actualizar estado según el progreso
+            if ($validated['progress'] >= 100) {
+                $updateData['status'] = LessonProgress::STATUS_COMPLETED;
+                $updateData['completed_at'] = now();
 
-        $progress->update($updateData);
+                // Actualizar perfil del estudiante
+                $this->updateStudentProfileOnCompletion($progress);
+            } elseif ($validated['progress'] > 0) {
+                $updateData['status'] = LessonProgress::STATUS_IN_PROGRESS;
+            }
+
+            $progress->update($updateData);
+
+            return $progress;
+        });
 
         if ($progress->status === LessonProgress::STATUS_COMPLETED) {
             \App\Services\ActivityService::log('lesson_completed', $lesson);

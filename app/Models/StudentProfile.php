@@ -88,13 +88,18 @@ class StudentProfile extends Model
 
     /**
      * Añade XP, actualiza total_xp/nivel y devuelve el resultado.
+     * Atómico: bloquea la fila con FOR UPDATE para evitar pérdidas de XP bajo concurrencia.
      */
     public function addXp(int $amount): array
     {
-        $this->xp += $amount;
-        $this->total_xp += $amount;
-        $this->level = self::levelFromXp($this->total_xp);
-        $this->save();
+        \DB::transaction(function () use ($amount) {
+            $locked = static::whereKey($this->id)->lockForUpdate()->first();
+            $locked->xp += $amount;
+            $locked->total_xp += $amount;
+            $locked->level = self::levelFromXp($locked->total_xp);
+            $locked->save();
+            $this->setRawAttributes($locked->getAttributes());
+        });
 
         return ['new_level' => $this->level, 'total_xp' => $this->total_xp];
     }

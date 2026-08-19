@@ -21,7 +21,7 @@ class LessonController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Lesson::query()->with(['teacher', 'progress']);
+        $query = Lesson::query()->with(['teacher']);
 
         // Filtros
         if ($request->has('difficulty') && $request->difficulty) {
@@ -62,14 +62,17 @@ class LessonController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate(min((int) ($request->per_page ?? 15), 50));
 
-        // Agregar información de progreso para estudiantes
+        // Agregar información de progreso para estudiantes (una sola query agrupada, evita N+1)
         if (Auth::user()->isStudent()) {
-            foreach ($lessons as $lesson) {
-                $progress = LessonProgress::where('user_id', Auth::id())
-                    ->where('lesson_id', $lesson->id)
-                    ->first();
-                $lesson->user_progress = $progress;
-            }
+            $myProgress = LessonProgress::where('user_id', Auth::id())
+                ->whereIn('lesson_id', $lessons->pluck('id'))
+                ->get()
+                ->keyBy('lesson_id');
+
+            $lessons->getCollection()->transform(function ($lesson) use ($myProgress) {
+                $lesson->user_progress = $myProgress->get($lesson->id);
+                return $lesson;
+            });
         }
 
         return response()->json([
@@ -680,17 +683,21 @@ class LessonController extends Controller
         $lessons = Lesson::where('is_published', true)
             ->where('difficulty', $difficulty)
             ->whereNotIn('id', $completedLessonIds)
-            ->with(['teacher', 'progress'])
+            ->with(['teacher'])
             ->orderBy('order', 'asc')
             ->limit(10)
             ->get();
 
-        foreach ($lessons as $lesson) {
-            $progress = LessonProgress::where('user_id', $user->id)
-                ->where('lesson_id', $lesson->id)
-                ->first();
-            $lesson->user_progress = $progress;
-        }
+        // Progreso del estudiante en las recomendadas (una sola query, evita N+1)
+        $myProgress = LessonProgress::where('user_id', $user->id)
+            ->whereIn('lesson_id', $lessons->pluck('id'))
+            ->get()
+            ->keyBy('lesson_id');
+
+        $lessons->transform(function ($lesson) use ($myProgress) {
+            $lesson->user_progress = $myProgress->get($lesson->id);
+            return $lesson;
+        });
 
         return response()->json([
             'success' => true,

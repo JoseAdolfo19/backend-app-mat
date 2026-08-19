@@ -75,11 +75,17 @@ class RankingController extends Controller
             }
         }
 
-        $ranked = $merged->sortByDesc('avg_score')->values()->map(function ($item, $index) {
-            $user = \App\Models\User::find($item->user_id);
+        $ranked = $merged->sortByDesc('avg_score')->values();
+
+        // Precargar usuarios en una sola query (evita N+1 de User::find por estudiante)
+        $userNames = \App\Models\User::whereIn('id', $ranked->pluck('user_id'))
+            ->get(['id', 'full_name'])
+            ->keyBy('id');
+
+        $ranked = $ranked->map(function ($item, $index) use ($userNames) {
             return [
                 'position' => $index + 1,
-                'student_name' => $user?->full_name ?? 'Unknown',
+                'student_name' => $userNames->get($item->user_id)?->full_name ?? 'Unknown',
                 'student_id' => $item->user_id,
                 'average_score' => round($item->avg_score, 2),
                 'total_works' => $item->total,
@@ -151,11 +157,17 @@ class RankingController extends Controller
             }
         }
 
-        $ranked = $merged->sortByDesc('avg_score')->values()->map(function ($item, $index) {
-            $user = \App\Models\User::find($item->user_id);
+        $ranked = $merged->sortByDesc('avg_score')->values();
+
+        // Precargar usuarios en una sola query (evita N+1 de User::find por estudiante)
+        $userNames = \App\Models\User::whereIn('id', $ranked->pluck('user_id'))
+            ->get(['id', 'full_name'])
+            ->keyBy('id');
+
+        $ranked = $ranked->map(function ($item, $index) use ($userNames) {
             return [
                 'position' => $index + 1,
-                'student_name' => $user?->full_name ?? 'Unknown',
+                'student_name' => $userNames->get($item->user_id)?->full_name ?? 'Unknown',
                 'student_id' => $item->user_id,
                 'average_score' => round($item->avg_score, 2),
                 'total_works' => $item->total,

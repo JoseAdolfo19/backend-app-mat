@@ -50,12 +50,18 @@ class ReportController extends Controller
             $query->whereIn('evaluation_id', $evaluationIds);
         }
 
-        // Estadísticas
+        // Estadísticas: 4 agregados escalares en una sola query (antes 4 queries por separado)
+        $aggregate = (clone $query)
+            ->selectRaw('COUNT(*) as total, AVG(score) as avg_score, COUNT(DISTINCT user_id) as distinct_users, SUM(CASE WHEN score >= 12 THEN 1 ELSE 0 END) as passing')
+            ->first();
+
+        $total = (int) ($aggregate->total ?? 0);
+
         $stats = [
-            'total_evaluations' => (clone $query)->count(),
-            'average_score' => (clone $query)->avg('score'),
-            'total_students' => (clone $query)->distinct('user_id')->count('user_id'),
-            'passing_rate' => $this->calculatePassingRate(clone $query),
+            'total_evaluations' => $total,
+            'average_score' => $aggregate->avg_score,
+            'total_students' => (int) ($aggregate->distinct_users ?? 0),
+            'passing_rate' => $total > 0 ? round(((int) ($aggregate->passing ?? 0) / $total) * 100, 2) : 0,
             'top_performers' => $this->getTopPerformers(clone $query),
             'difficulty_areas' => $this->getDifficultyAreas(clone $query)
         ];
@@ -583,7 +589,7 @@ class ReportController extends Controller
         $teacherEvalIds = $this->teacherScopedEvaluationIds();
         $teacherLessonIds = $this->teacherScopedLessonIds();
 
-        $students = DB::table('evaluation_results')
+        $students = EvaluationResult::query()
             ->where('status', 'completed')
             ->when($teacherEvalIds, fn ($q) => $q->whereIn('evaluation_id', $teacherEvalIds))
             ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $unit))
@@ -598,39 +604,47 @@ class ReportController extends Controller
             )
             ->unique();
 
-        $studentData = $students->map(function ($studentId) use ($unit, $teacherEvalIds, $teacherLessonIds) {
-            $user = \App\Models\User::find($studentId);
-            $evalAvg = EvaluationResult::where('user_id', $studentId)
-                ->where('status', 'completed')
-                ->when($teacherEvalIds, fn ($q) => $q->whereIn('evaluation_id', $teacherEvalIds))
-                ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $unit))
-                ->avg('score');
+        // Agregaciones agrupadas en SQL (evita N+1: antes 5 queries/estudiante)
+        $studentIds = $students->all();
 
-            $worksCount = SubmittedWork::where('student_id', $studentId)
-                ->where('status', 'graded')
-                ->when($teacherLessonIds, fn ($q) => $q->whereIn('lesson_id', $teacherLessonIds))
-                ->whereHas('lesson', fn ($q) => $q->where('unit', $unit))
-                ->count();
+        $users = \App\Models\User::whereIn('id', $studentIds)
+            ->get(['id', 'full_name'])
+            ->keyBy('id');
 
-            $workAvg = SubmittedWork::where('student_id', $studentId)
-                ->where('status', 'graded')
-                ->when($teacherLessonIds, fn ($q) => $q->whereIn('lesson_id', $teacherLessonIds))
-                ->whereHas('lesson', fn ($q) => $q->where('unit', $unit))
-                ->avg('score');
+        $evalRows = EvaluationResult::where('status', 'completed')
+            ->when($teacherEvalIds, fn ($q) => $q->whereIn('evaluation_id', $teacherEvalIds))
+            ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $unit))
+            ->whereIn('user_id', $studentIds)
+            ->selectRaw('user_id, AVG(score) as avg_score, COUNT(*) as total')
+            ->groupBy('user_id')
+            ->get()
+            ->keyBy('user_id');
+
+        $workRows = SubmittedWork::where('status', 'graded')
+            ->when($teacherLessonIds, fn ($q) => $q->whereIn('lesson_id', $teacherLessonIds))
+            ->whereHas('lesson', fn ($q) => $q->where('unit', $unit))
+            ->whereIn('student_id', $studentIds)
+            ->selectRaw('student_id, AVG(score) as avg_score, COUNT(*) as total')
+            ->groupBy('student_id')
+            ->get()
+            ->keyBy('student_id');
+
+        $studentData = collect($studentIds)->map(function ($studentId) use ($unit, $users, $evalRows, $workRows) {
+            $eval = $evalRows->get($studentId);
+            $work = $workRows->get($studentId);
+
+            $evalAvg = $eval?->avg_score;
+            $workAvg = $work?->avg_score;
 
             $scores = collect(array_filter([$evalAvg, $workAvg]));
             $average = $scores->count() > 0 ? round($scores->avg(), 2) : null;
 
             return [
                 'student_id' => $studentId,
-                'student_name' => $user?->full_name ?? 'Unknown',
+                'student_name' => $users->get($studentId)?->full_name ?? 'Unknown',
                 'average' => $average,
-                'evaluations_count' => EvaluationResult::where('user_id', $studentId)
-                    ->where('status', 'completed')
-                    ->when($teacherEvalIds, fn ($q) => $q->whereIn('evaluation_id', $teacherEvalIds))
-                    ->whereHas('evaluation.lesson', fn ($q) => $q->where('unit', $unit))
-                    ->count(),
-                'submitted_works_count' => $worksCount,
+                'evaluations_count' => (int) ($eval?->total ?? 0),
+                'submitted_works_count' => (int) ($work?->total ?? 0),
             ];
         })->sortByDesc('average')->values();
 
@@ -1019,15 +1033,6 @@ class ReportController extends Controller
         }
 
         return $query;
-    }
-
-    private function calculatePassingRate($query)
-    {
-        $total = $query->count();
-        if ($total === 0) return 0;
-
-        $passing = $query->where('score', '>=', 12)->count();
-        return round(($passing / $total) * 100, 2);
     }
 
     private function getTopPerformers($query)

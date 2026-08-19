@@ -11,6 +11,7 @@ use App\Models\Evaluation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class SubmittedWorkController extends Controller
 {
@@ -317,7 +318,29 @@ class SubmittedWorkController extends Controller
         $teacherEvaluationIds = Evaluation::where('teacher_id', $user->id)->pluck('id')->toArray();
         $teacherExamIds = \App\Models\Exam::where('teacher_id', $user->id)->pluck('id')->toArray();
 
-        $created = 0;
+        // Preload titles (evita N+1 de find por fila)
+        $lessons = \App\Models\Lesson::whereIn('id', $teacherLessonIds)->pluck('title', 'id');
+        $evaluations = Evaluation::whereIn('id', $teacherEvaluationIds)->pluck('title', 'id');
+        $exams = \App\Models\Exam::whereIn('id', $teacherExamIds)->pluck('title', 'id');
+
+        // Claves existentes en una sola query por tipo (evita exists() por fila)
+        $existingLessonKeys = SubmittedWork::where('work_type', 'lesson')
+            ->whereIn('lesson_id', $teacherLessonIds)
+            ->get(['student_id', 'lesson_id'])
+            ->mapWithKeys(fn ($w) => [$w->student_id . '|' . $w->lesson_id => true]);
+
+        $existingEvalKeys = SubmittedWork::where('work_type', 'evaluation')
+            ->whereIn('evaluation_id', $teacherEvaluationIds)
+            ->get(['student_id', 'evaluation_id'])
+            ->mapWithKeys(fn ($w) => [$w->student_id . '|' . $w->evaluation_id => true]);
+
+        $existingExamKeys = SubmittedWork::where('work_type', 'exam')
+            ->whereIn('exam_id', $teacherExamIds)
+            ->get(['student_id', 'exam_id'])
+            ->mapWithKeys(fn ($w) => [$w->student_id . '|' . $w->exam_id => true]);
+
+        $newWorks = [];
+        $now = now();
 
         // From completed lessons
         $completedLessons = LessonProgress::where('status', 'completed')
@@ -325,25 +348,25 @@ class SubmittedWorkController extends Controller
             ->get();
 
         foreach ($completedLessons as $lp) {
-            $exists = SubmittedWork::where('student_id', $lp->user_id)
-                ->where('lesson_id', $lp->lesson_id)
-                ->where('work_type', 'lesson')
-                ->exists();
-
-            if (!$exists) {
-                $lesson = \App\Models\Lesson::find($lp->lesson_id);
-                SubmittedWork::create([
-                    'student_id' => $lp->user_id,
-                    'lesson_id' => $lp->lesson_id,
-                    'work_type' => 'lesson',
-                    'title' => $lesson?->title ?? 'Lesson Work',
-                    'status' => 'submitted',
-                    'score' => null,
-                    'max_score' => 20,
-                    'submitted_at' => $lp->completed_at,
-                ]);
-                $created++;
+            if (isset($existingLessonKeys[$lp->user_id . '|' . $lp->lesson_id])) {
+                continue;
             }
+            $newWorks[] = [
+                'id' => Str::uuid(),
+                'student_id' => $lp->user_id,
+                'lesson_id' => $lp->lesson_id,
+                'evaluation_id' => null,
+                'exam_id' => null,
+                'work_type' => 'lesson',
+                'title' => $lessons[$lp->lesson_id] ?? 'Lesson Work',
+                'status' => 'submitted',
+                'score' => null,
+                'max_score' => 20,
+                'submitted_at' => $lp->completed_at,
+                'graded_at' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
         }
 
         // From evaluation results
@@ -352,27 +375,26 @@ class SubmittedWorkController extends Controller
             ->get();
 
         foreach ($evalResults as $er) {
-            $exists = SubmittedWork::where('student_id', $er->user_id)
-                ->where('evaluation_id', $er->evaluation_id)
-                ->where('work_type', 'evaluation')
-                ->exists();
-
-            if (!$exists) {
-                $evaluation = Evaluation::find($er->evaluation_id);
-                $scaledScore = $er->max_score > 0 ? (int) round(($er->score / $er->max_score) * 20) : 0;
-                SubmittedWork::create([
-                    'student_id' => $er->user_id,
-                    'evaluation_id' => $er->evaluation_id,
-                    'work_type' => 'evaluation',
-                    'title' => $evaluation?->title ?? 'Evaluation Work',
-                    'status' => 'graded',
-                    'score' => min($scaledScore, 20),
-                    'max_score' => 20,
-                    'submitted_at' => $er->completed_at,
-                    'graded_at' => $er->completed_at,
-                ]);
-                $created++;
+            if (isset($existingEvalKeys[$er->user_id . '|' . $er->evaluation_id])) {
+                continue;
             }
+            $scaledScore = $er->max_score > 0 ? (int) round(($er->score / $er->max_score) * 20) : 0;
+            $newWorks[] = [
+                'id' => Str::uuid(),
+                'student_id' => $er->user_id,
+                'lesson_id' => null,
+                'evaluation_id' => $er->evaluation_id,
+                'exam_id' => null,
+                'work_type' => 'evaluation',
+                'title' => $evaluations[$er->evaluation_id] ?? 'Evaluation Work',
+                'status' => 'graded',
+                'score' => min($scaledScore, 20),
+                'max_score' => 20,
+                'submitted_at' => $er->completed_at,
+                'graded_at' => $er->completed_at,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
         }
 
         // From completed exam attempts
@@ -381,27 +403,32 @@ class SubmittedWorkController extends Controller
             ->get();
 
         foreach ($examAttempts as $ea) {
-            $exists = SubmittedWork::where('student_id', $ea->student_id)
-                ->where('exam_id', $ea->exam_id)
-                ->where('work_type', 'exam')
-                ->exists();
-
-            if (!$exists) {
-                $exam = \App\Models\Exam::find($ea->exam_id);
-                $scaledScore = $ea->total_points > 0 ? (int) round(($ea->score / $ea->total_points) * 20) : 0;
-                SubmittedWork::create([
-                    'student_id' => $ea->student_id,
-                    'exam_id' => $ea->exam_id,
-                    'work_type' => 'exam',
-                    'title' => $exam?->title ?? 'Exam Work',
-                    'status' => 'graded',
-                    'score' => min($scaledScore, 20),
-                    'max_score' => 20,
-                    'submitted_at' => $ea->completed_at,
-                    'graded_at' => $ea->completed_at,
-                ]);
-                $created++;
+            if (isset($existingExamKeys[$ea->student_id . '|' . $ea->exam_id])) {
+                continue;
             }
+            $scaledScore = $ea->total_points > 0 ? (int) round(($ea->score / $ea->total_points) * 20) : 0;
+            $newWorks[] = [
+                'id' => Str::uuid(),
+                'student_id' => $ea->student_id,
+                'lesson_id' => null,
+                'evaluation_id' => null,
+                'exam_id' => $ea->exam_id,
+                'work_type' => 'exam',
+                'title' => $exams[$ea->exam_id] ?? 'Exam Work',
+                'status' => 'graded',
+                'score' => min($scaledScore, 20),
+                'max_score' => 20,
+                'submitted_at' => $ea->completed_at,
+                'graded_at' => $ea->completed_at,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        // Inserción masiva atómica (bulk insert en una sola query)
+        $created = count($newWorks);
+        if ($created > 0) {
+            \DB::transaction(fn () => SubmittedWork::insert($newWorks));
         }
 
         return response()->json([

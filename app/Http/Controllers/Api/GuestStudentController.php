@@ -41,11 +41,15 @@ class GuestStudentController extends Controller
 
         $sessionCaptcha = $decoded['code'];
         if (strtoupper($validated['captcha_answer']) !== strtoupper($sessionCaptcha)) {
-            $key = 'captcha_attempts:' . $request->ip();
-            $attempts = (int) \Illuminate\Support\Facades\Cache::get($key, 0) + 1;
-            Cache::put($key, $attempts, now()->addMinutes(10));
-            if ($attempts >= self::CAPTCHA_MAX_ATTEMPTS) {
-                Cache::forget($key);
+            $ipKey = 'captcha_attempts:' . $request->ip();
+            $dniKey = 'captcha_attempts_dni:' . $validated['dni'];
+            $attempts = (int) Cache::get($ipKey, 0) + 1;
+            Cache::put($ipKey, $attempts, now()->addMinutes(10));
+            $dniAttempts = (int) Cache::get($dniKey, 0) + 1;
+            Cache::put($dniKey, $dniAttempts, now()->addMinutes(10));
+            if ($attempts >= self::CAPTCHA_MAX_ATTEMPTS || $dniAttempts >= self::CAPTCHA_MAX_ATTEMPTS) {
+                Cache::forget($ipKey);
+                Cache::forget($dniKey);
                 return response()->json([
                     'success' => false,
                     'message' => 'Demasiados intentos. Solicite un nuevo captcha.',
@@ -58,6 +62,7 @@ class GuestStudentController extends Controller
         }
 
         Cache::forget('captcha_attempts:' . $request->ip());
+        Cache::forget('captcha_attempts_dni:' . $validated['dni']);
 
         $student = User::where('dni', $validated['dni'])
             ->whereHas('role', fn ($q) => $q->where('name', 'student'))
@@ -193,7 +198,7 @@ class GuestStudentController extends Controller
         return response()->json([
             'success' => true,
             'captcha_token' => $token,
-            'captcha_image' => $this->renderSvg($captcha),
+            'captcha_image' => $this->renderCaptchaPng($captcha),
             'captcha_image_url' => null,
             'expires_in' => self::CAPTCHA_TTL_SECONDS,
         ]);
@@ -215,48 +220,50 @@ class GuestStudentController extends Controller
         return $payload;
     }
 
-    private function renderSvg(string $code): string
+    /**
+     * Renderiza el captcha como imagen PNG (raster) con ruido.
+     * A diferencia del SVG anterior, la respuesta no es texto seleccionable/máquina,
+     * por lo que exige OCR real para automatizar.
+     */
+    private function renderCaptchaPng(string $code): string
     {
         $width = 160;
         $height = 50;
-        $lines = [];
-        $text = '';
 
-        for ($i = 0; $i < 5; $i++) {
-            $lines[] = sprintf(
-                '<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#cbd5e1" stroke-width="1.5"/>',
-                random_int(5, $width - 5),
-                random_int(5, $height),
-                random_int(5, $width - 5),
-                random_int(5, $height)
+        $img = imagecreatetruecolor($width, $height);
+
+        $bg = imagecolorallocate($img, 241, 245, 249);
+        imagefilledrectangle($img, 0, 0, $width, $height, $bg);
+
+        $noise = imagecolorallocate($img, 203, 213, 225);
+
+        for ($i = 0; $i < 6; $i++) {
+            imageline(
+                $img,
+                random_int(0, $width),
+                random_int(0, $height),
+                random_int(0, $width),
+                random_int(0, $height),
+                $noise
             );
         }
 
+        for ($i = 0; $i < 140; $i++) {
+            imagesetpixel($img, random_int(0, $width), random_int(0, $height), $noise);
+        }
+
+        $charColor = imagecolorallocate($img, 30, 41, 59);
         foreach (str_split($code) as $i => $char) {
-            $x = 18 + ($i * 24);
-            $y = random_int(30, 38);
-            $rot = random_int(-18, 18);
-            $text .= sprintf(
-                '<text x="%d" y="%d" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#1e293b" transform="rotate(%d %d %d)">%s</text>',
-                $x,
-                $y,
-                $rot,
-                $x,
-                $y,
-                htmlspecialchars($char, ENT_QUOTES, 'UTF-8')
-            );
+            $x = 15 + ($i * 27);
+            $y = random_int(10, 22);
+            imagestring($img, 5, $x, $y, $char, $charColor);
         }
 
-        $svg = sprintf(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" role="img" aria-label="captcha">%s%s</svg>',
-            $width,
-            $height,
-            $width,
-            $height,
-            implode('', $lines),
-            $text
-        );
+        ob_start();
+        imagepng($img);
+        $png = ob_get_clean();
+        imagedestroy($img);
 
-        return 'data:image/svg+xml;base64,' . base64_encode($svg);
+        return 'data:image/png;base64,' . base64_encode($png);
     }
 }

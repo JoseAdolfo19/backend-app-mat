@@ -244,6 +244,25 @@ class AdminController extends Controller
         return response()->json($config);
     }
 
+    /**
+     * Configuración pública (solo branding). No expone metadata sensible
+     * como email_notifications, backup_frequency ni last_backup.
+     */
+    public function publicConfig()
+    {
+        $config = InstitutionConfig::first();
+
+        return response()->json([
+            'institution_name' => $config?->institution_name ?? 'KawsayMath Education',
+            'primary_color' => $config?->primary_color ?? '#004AC6',
+            'secondary_color' => $config?->secondary_color ?? '#006C49',
+            'tertiary_color' => $config?->tertiary_color ?? null,
+            'background_color' => $config?->background_color ?? null,
+            'surface_color' => $config?->surface_color ?? null,
+            'logo' => $config?->logo ?? null,
+        ]);
+    }
+
     public function updateConfig(Request $request)
     {
         $config = InstitutionConfig::first() ?? InstitutionConfig::create([

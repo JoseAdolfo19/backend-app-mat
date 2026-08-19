@@ -566,7 +566,7 @@ Route::prefix('v1')->group(function () {
     // RUTAS PÚBLICAS (Sin autenticación)
     // ============================================================
 
-    Route::get('/config', [AdminController::class, 'getConfig'])
+    Route::get('/config', [AdminController::class, 'publicConfig'])
         ->middleware('throttle:30,1');
 
     Route::get('/translations/overrides', [SystemTranslationController::class, 'publicOverrides'])

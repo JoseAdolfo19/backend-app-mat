@@ -380,7 +380,7 @@ class SalonController extends Controller
             'dni' => 'required|string|max:8|unique:users,dni',
             'full_name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email',
-            'password' => 'required|string|min:6',
+            'password' => 'required|string|min:8',
             'grade' => 'nullable|string|max:20',
         ]);
 

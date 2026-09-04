@@ -125,4 +125,16 @@ return [
 
     'cors_origins' => env('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://localhost:8000,https://frontend-app-mat.vercel.app'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Default Student Password
+    |--------------------------------------------------------------------------
+    |
+    | Contraseña temporal asignada a los alumnos creados/importados por un
+    | coordinador. Debe cambiarse en el primer inicio de sesión.
+    |
+    */
+
+    'default_student_password' => env('DEFAULT_STUDENT_PASSWORD', 'password123'),
+
 ];

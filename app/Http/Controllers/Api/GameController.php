@@ -230,7 +230,8 @@ class GameController extends Controller
         $submission = GameSubmission::updateOrCreate(
             ['game_id' => $game->id, 'student_id' => $user->id],
             [
-                'id' => Str::uuid(),
+                // No se incluye 'id': si el registro ya existe, updateOrCreate no debe
+                // cambiar la clave primaria (evita filas huérfanas al reenviar).
                 'score' => $validated['score'] ?? null,
                 'screenshot_url' => $validated['screenshot_url'] ?? null,
                 'status' => 'pending',

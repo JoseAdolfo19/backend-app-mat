@@ -7,7 +7,6 @@ use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Models\ExamAttempt;
 use App\Models\Notification;
-use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -131,20 +130,6 @@ class ExamController extends Controller
                 ]);
             }
 
-            AuditLog::create([
-                'user_id' => auth()->id(),
-                'action' => 'exam.store',
-                'auditable_type' => Exam::class,
-                'auditable_id' => $exam->id,
-                'new_values' => $exam->only('id', 'title', 'teacher_id', 'unit', 'difficulty'),
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent(),
-                'method' => request()->method(),
-                'path' => request()->path(),
-                'platform' => request()->header('X-Platform', 'test'),
-                'status_code' => 201,
-            ]);
-
             DB::commit();
 
             return response()->json([
@@ -257,20 +242,6 @@ class ExamController extends Controller
                 ]);
             }
 
-            AuditLog::create([
-                'user_id' => auth()->id(),
-                'action' => 'exam.update',
-                'auditable_type' => Exam::class,
-                'auditable_id' => $exam->id,
-                'new_values' => $validated,
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent(),
-                'method' => request()->method(),
-                'path' => request()->path(),
-                'platform' => request()->header('X-Platform', 'test'),
-                'status_code' => 200,
-            ]);
-
             DB::commit();
 
             return response()->json([
@@ -306,20 +277,6 @@ class ExamController extends Controller
                 'message' => 'No se puede eliminar un examen que ya tiene intentos registrados'
             ], 400);
         }
-
-        AuditLog::create([
-            'user_id' => auth()->id(),
-            'action' => 'exam.destroy',
-            'auditable_type' => Exam::class,
-            'auditable_id' => $exam->id,
-            'old_values' => $exam->only('id', 'title', 'teacher_id'),
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'method' => request()->method(),
-            'path' => request()->path(),
-            'platform' => request()->header('X-Platform', 'test'),
-            'status_code' => 200,
-        ]);
 
         $exam->delete();
 
@@ -542,20 +499,6 @@ class ExamController extends Controller
                 'answers' => $answersResult,
                 'time_spent' => $validated['time_spent'] ?? 0,
                 'completed_at' => now(),
-            ]);
-
-            AuditLog::create([
-                'user_id' => auth()->id(),
-                'action' => 'exam_attempt.submit',
-                'auditable_type' => ExamAttempt::class,
-                'auditable_id' => $attempt->id,
-                'new_values' => ['score' => $score, 'status' => ExamAttempt::STATUS_COMPLETED],
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent(),
-                'method' => request()->method(),
-                'path' => request()->path(),
-                'platform' => request()->header('X-Platform', 'test'),
-                'status_code' => 200,
             ]);
 
             DB::commit();

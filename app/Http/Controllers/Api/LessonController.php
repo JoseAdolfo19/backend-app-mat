@@ -8,7 +8,6 @@ use App\Models\Lesson;
 use App\Models\LessonProgress;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -194,20 +193,6 @@ class LessonController extends Controller
             'views_count' => 0
         ]);
 
-        AuditLog::create([
-            'user_id' => auth()->id(),
-            'action' => 'lesson.store',
-            'auditable_type' => Lesson::class,
-            'auditable_id' => $lesson->id,
-            'new_values' => $lesson->only('id', 'title', 'difficulty', 'teacher_id'),
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'method' => request()->method(),
-            'path' => request()->path(),
-            'platform' => request()->header('X-Platform', 'test'),
-            'status_code' => 200,
-        ]);
-
         // Notificar a estudiantes sobre nueva lección
         $studentRole = Role::where('name', Role::STUDENT)->first();
         if ($studentRole) {
@@ -334,21 +319,6 @@ class LessonController extends Controller
         $oldValues = $lesson->only(array_keys($validated));
         $lesson->update($validated);
 
-        AuditLog::create([
-            'user_id' => auth()->id(),
-            'action' => 'lesson.update',
-            'auditable_type' => Lesson::class,
-            'auditable_id' => $lesson->id,
-            'old_values' => $oldValues,
-            'new_values' => $validated,
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'method' => request()->method(),
-            'path' => request()->path(),
-            'platform' => request()->header('X-Platform', 'test'),
-            'status_code' => 200,
-        ]);
-
         return response()->json([
             'success' => true,
             'message' => __('lesson_updated'),
@@ -378,20 +348,6 @@ class LessonController extends Controller
                 'message' => __('lesson_cannot_delete_has_evaluations')
             ], 400);
         }
-
-        AuditLog::create([
-            'user_id' => auth()->id(),
-            'action' => 'lesson.destroy',
-            'auditable_type' => Lesson::class,
-            'auditable_id' => $lesson->id,
-            'old_values' => $lesson->only('id', 'title', 'teacher_id'),
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'method' => request()->method(),
-            'path' => request()->path(),
-            'platform' => request()->header('X-Platform', 'test'),
-            'status_code' => 200,
-        ]);
 
         $lesson->delete();
 

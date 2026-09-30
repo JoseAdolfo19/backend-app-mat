@@ -17,7 +17,6 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.active' => \App\Http\Middleware\Authenticate::class,
             'rate.limit' => \App\Http\Middleware\ApiRateLimit::class,
             'cache.api' => \App\Http\Middleware\CacheResponse::class,
-            'audit' => \App\Http\Middleware\AuditLog::class,
         ]);
         $middleware->prepend([
             \App\Http\Middleware\Cors::class,

@@ -10,7 +10,6 @@ use App\Models\StudentAnswer;
 use App\Models\Lesson;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -183,20 +182,6 @@ class EvaluationController extends Controller
             'total_points' => 0
         ]);
 
-        AuditLog::create([
-            'user_id' => auth()->id(),
-            'action' => 'evaluation.store',
-            'auditable_type' => Evaluation::class,
-            'auditable_id' => $evaluation->id,
-            'new_values' => $evaluation->only('id', 'title', 'type', 'difficulty', 'teacher_id', 'lesson_id'),
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'method' => request()->method(),
-            'path' => request()->path(),
-            'platform' => request()->header('X-Platform', 'test'),
-            'status_code' => 200,
-        ]);
-
         return response()->json([
             'success' => true,
             'message' => __('evaluation_created'),
@@ -235,21 +220,6 @@ class EvaluationController extends Controller
         $oldValues = $evaluation->only(array_keys($validated));
         $evaluation->update($validated);
 
-        AuditLog::create([
-            'user_id' => auth()->id(),
-            'action' => 'evaluation.update',
-            'auditable_type' => Evaluation::class,
-            'auditable_id' => $evaluation->id,
-            'old_values' => $oldValues,
-            'new_values' => $validated,
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'method' => request()->method(),
-            'path' => request()->path(),
-            'platform' => request()->header('X-Platform', 'test'),
-            'status_code' => 200,
-        ]);
-
         return response()->json([
             'success' => true,
             'message' => __('evaluation_updated'),
@@ -278,20 +248,6 @@ class EvaluationController extends Controller
                 'message' => __('evaluation_cannot_delete_has_results')
             ], 400);
         }
-
-        AuditLog::create([
-            'user_id' => auth()->id(),
-            'action' => 'evaluation.destroy',
-            'auditable_type' => Evaluation::class,
-            'auditable_id' => $evaluation->id,
-            'old_values' => $evaluation->only('id', 'title', 'teacher_id', 'lesson_id'),
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'method' => request()->method(),
-            'path' => request()->path(),
-            'platform' => request()->header('X-Platform', 'test'),
-            'status_code' => 200,
-        ]);
 
         $evaluation->delete();
 

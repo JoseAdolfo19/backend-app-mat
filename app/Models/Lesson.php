@@ -5,11 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Traits\AuditLoggable;
 
 class Lesson extends Model
 {
-    use HasUuids, SoftDeletes, AuditLoggable;
+    use HasUuids, SoftDeletes;
 
     protected $keyType = 'string';
     public $incrementing = false;
@@ -42,28 +41,6 @@ class Lesson extends Model
         'order' => 'integer',
         'views_count' => 'integer'
     ];
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::created(function ($lesson) {
-            $lesson->logAudit('lesson.created', null, $lesson->only('id', 'title', 'teacher_id', 'difficulty', 'is_published'));
-        });
-
-        static::updated(function ($lesson) {
-            $changes = $lesson->getChanges();
-            $oldValues = [];
-            foreach (array_keys($changes) as $key) {
-                $oldValues[$key] = $lesson->getOriginal($key);
-            }
-            $lesson->logAudit('lesson.updated', $oldValues, $changes);
-        });
-
-        static::deleted(function ($lesson) {
-            $lesson->logAudit('lesson.deleted', $lesson->only('id', 'title', 'teacher_id'), null);
-        });
-    }
 
     // ========== CONSTANTES ==========
     const DIFFICULTY_BASIC = 'basic';

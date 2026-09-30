@@ -8,11 +8,10 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use App\Traits\AuditLoggable;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable, HasUuids, AuditLoggable, SoftDeletes;
+    use HasApiTokens, HasFactory, Notifiable, HasUuids, SoftDeletes;
 
     protected $keyType = 'string';
     public $incrementing = false;
@@ -48,28 +47,6 @@ class User extends Authenticatable
         'is_active' => 'boolean',
         'password' => 'hashed',
     ];
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::created(function ($user) {
-            $user->logAudit('user.created', null, $user->only('id', 'full_name', 'email', 'role_id', 'is_active', 'provider'));
-        });
-
-        static::updated(function ($user) {
-            $changes = $user->getChanges();
-            $oldValues = [];
-            foreach (array_keys($changes) as $key) {
-                $oldValues[$key] = $user->getOriginal($key);
-            }
-            $user->logAudit('user.updated', $oldValues, $changes);
-        });
-
-        static::deleted(function ($user) {
-            $user->logAudit('user.deleted', $user->only('id', 'full_name', 'email'), null);
-        });
-    }
 
     // ========== RELACIONES ==========
     public function role()

@@ -84,28 +84,20 @@ Route::prefix('v1')->group(function () {
         Route::prefix('user')->group(function () {
             Route::get('/profile', [AuthController::class, 'profile'])
                 ->middleware('cache.api');
-            Route::put('/profile', [AuthController::class, 'updateProfile'])
-                ->middleware('audit');
-            Route::put('/change-password', [AuthController::class, 'changePassword'])
-                ->middleware('audit');
+            Route::put('/profile', [AuthController::class, 'updateProfile']);
+            Route::put('/change-password', [AuthController::class, 'changePassword']);
             Route::post('/send-verification-email', [AuthController::class, 'sendVerificationEmail'])
                 ->middleware('throttle:3,1');
             Route::post('/verify-email', [AuthController::class, 'verifyEmail'])
                 ->middleware('throttle:5,1');
-            Route::post('/connect-google', [AuthController::class, 'connectGoogle'])
-                ->middleware('audit');
-            Route::post('/disconnect-google', [AuthController::class, 'disconnectGoogle'])
-                ->middleware('audit');
-            Route::post('/logout', [AuthController::class, 'logout'])
-                ->middleware('audit');
-            Route::post('/logout-platform', [AuthController::class, 'logoutPlatform'])
-                ->middleware('audit');
-            Route::post('/logout-all', [AuthController::class, 'logoutAll'])
-                ->middleware('audit');
+            Route::post('/connect-google', [AuthController::class, 'connectGoogle']);
+            Route::post('/disconnect-google', [AuthController::class, 'disconnectGoogle']);
+            Route::post('/logout', [AuthController::class, 'logout']);
+            Route::post('/logout-platform', [AuthController::class, 'logoutPlatform']);
+            Route::post('/logout-all', [AuthController::class, 'logoutAll']);
             Route::get('/devices', [AuthController::class, 'devices'])
                 ->middleware('cache.api');
-            Route::post('/refresh-token', [AuthController::class, 'refreshToken'])
-                ->middleware('audit');
+            Route::post('/refresh-token', [AuthController::class, 'refreshToken']);
         });
         
         // ============================================================
@@ -113,10 +105,8 @@ Route::prefix('v1')->group(function () {
         // ============================================================
         
         Route::prefix('devices')->group(function () {
-            Route::post('/register', [DeviceController::class, 'register'])
-                ->middleware('audit');
-            Route::post('/unregister', [DeviceController::class, 'unregister'])
-                ->middleware('audit');
+            Route::post('/register', [DeviceController::class, 'register']);
+            Route::post('/unregister', [DeviceController::class, 'unregister']);
             Route::get('/', [DeviceController::class, 'list'])
                 ->middleware('cache.api');
         });
@@ -130,14 +120,10 @@ Route::prefix('v1')->group(function () {
                 ->middleware('cache.api');
             Route::get('/unread-count', [NotificationController::class, 'unreadCount'])
                 ->middleware('cache.api');
-            Route::put('/read-all', [NotificationController::class, 'markAllAsRead'])
-                ->middleware('audit');
-            Route::delete('/read/delete', [NotificationController::class, 'deleteRead'])
-                ->middleware('audit');
-            Route::put('/{id}/read', [NotificationController::class, 'markAsRead'])
-                ->middleware('audit');
-            Route::delete('/{id}', [NotificationController::class, 'destroy'])
-                ->middleware('audit');
+            Route::put('/read-all', [NotificationController::class, 'markAllAsRead']);
+            Route::delete('/read/delete', [NotificationController::class, 'deleteRead']);
+            Route::put('/{id}/read', [NotificationController::class, 'markAsRead']);
+            Route::delete('/{id}', [NotificationController::class, 'destroy']);
         });
         
         // ============================================================
@@ -192,27 +178,19 @@ Route::prefix('v1')->group(function () {
             Route::get('/{id}/progress', [ProgressController::class, 'getLessonProgress'])
                 ->middleware('cache.api');
             Route::post('/{id}/progress', [ProgressController::class, 'updateLessonProgress'])
-                ->middleware(['role:student', 'audit']);
+                ->middleware(['role:student']);
             
             Route::middleware(['role:teacher'])->group(function () {
-                Route::post('/', [LessonController::class, 'store'])
-                    ->middleware('audit');
+                Route::post('/', [LessonController::class, 'store']);
                 Route::post('/resources/upload', [LessonController::class, 'uploadResource'])
-                    ->middleware(['throttle:30,1', 'audit']);
-                Route::put('/{id}', [LessonController::class, 'update'])
-                    ->middleware('audit');
-                Route::delete('/{id}', [LessonController::class, 'destroy'])
-                    ->middleware('audit');
-                Route::post('/{id}/publish', [LessonController::class, 'publish'])
-                    ->middleware('audit');
-                Route::post('/{id}/unpublish', [LessonController::class, 'unpublish'])
-                    ->middleware('audit');
-                Route::post('/{id}/duplicate', [LessonController::class, 'duplicate'])
-                    ->middleware('audit');
-                Route::post('/{id}/resources', [LessonController::class, 'addResource'])
-                    ->middleware('audit');
-                Route::delete('/{id}/resources/{resourceId}', [LessonController::class, 'removeResource'])
-                    ->middleware('audit');
+                    ->middleware(['throttle:30,1']);
+                Route::put('/{id}', [LessonController::class, 'update']);
+                Route::delete('/{id}', [LessonController::class, 'destroy']);
+                Route::post('/{id}/publish', [LessonController::class, 'publish']);
+                Route::post('/{id}/unpublish', [LessonController::class, 'unpublish']);
+                Route::post('/{id}/duplicate', [LessonController::class, 'duplicate']);
+                Route::post('/{id}/resources', [LessonController::class, 'addResource']);
+                Route::delete('/{id}/resources/{resourceId}', [LessonController::class, 'removeResource']);
                 Route::get('/{id}/stats', [LessonController::class, 'getStats'])
                     ->middleware('cache.api');
             });
@@ -232,7 +210,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/{evaluationId}/questions', [EvaluationController::class, 'getQuestions'])
                 ->middleware('cache.api');
             Route::post('/{evaluationId}/submit', [EvaluationController::class, 'submit'])
-                ->middleware(['role:student', 'audit']);
+                ->middleware(['role:student']);
             Route::get('/{evaluationId}/results', [EvaluationController::class, 'getResults'])
                 ->middleware('cache.api');
             
@@ -244,25 +222,16 @@ Route::prefix('v1')->group(function () {
             });
             
             Route::middleware(['role:teacher'])->group(function () {
-                Route::post('/', [EvaluationController::class, 'store'])
-                    ->middleware('audit');
-                Route::put('/{id}', [EvaluationController::class, 'update'])
-                    ->middleware('audit');
-                Route::delete('/{id}', [EvaluationController::class, 'destroy'])
-                    ->middleware('audit');
-                Route::post('/{id}/publish', [EvaluationController::class, 'publish'])
-                    ->middleware('audit');
-                Route::post('/{id}/unpublish', [EvaluationController::class, 'unpublish'])
-                    ->middleware('audit');
-                Route::post('/{id}/duplicate', [EvaluationController::class, 'duplicate'])
-                    ->middleware('audit');
+                Route::post('/', [EvaluationController::class, 'store']);
+                Route::put('/{id}', [EvaluationController::class, 'update']);
+                Route::delete('/{id}', [EvaluationController::class, 'destroy']);
+                Route::post('/{id}/publish', [EvaluationController::class, 'publish']);
+                Route::post('/{id}/unpublish', [EvaluationController::class, 'unpublish']);
+                Route::post('/{id}/duplicate', [EvaluationController::class, 'duplicate']);
                 
-                Route::post('/{evaluationId}/questions', [EvaluationController::class, 'addQuestion'])
-                    ->middleware('audit');
-                Route::put('/questions/{questionId}', [EvaluationController::class, 'updateQuestion'])
-                    ->middleware('audit');
-                Route::delete('/questions/{questionId}', [EvaluationController::class, 'deleteQuestion'])
-                    ->middleware('audit');
+                Route::post('/{evaluationId}/questions', [EvaluationController::class, 'addQuestion']);
+                Route::put('/questions/{questionId}', [EvaluationController::class, 'updateQuestion']);
+                Route::delete('/questions/{questionId}', [EvaluationController::class, 'deleteQuestion']);
             });
         });
         
@@ -274,21 +243,21 @@ Route::prefix('v1')->group(function () {
             Route::get('/', [ExamController::class, 'index'])
                 ->middleware(['cache.api', 'throttle:30,1']);
             Route::post('/', [ExamController::class, 'store'])
-                ->middleware(['role:teacher,admin', 'audit']);
+                ->middleware(['role:teacher,admin']);
             Route::get('/{id}', [ExamController::class, 'show'])
                 ->middleware('cache.api');
             Route::put('/{id}', [ExamController::class, 'update'])
-                ->middleware(['role:teacher,admin', 'audit']);
+                ->middleware(['role:teacher,admin']);
             Route::delete('/{id}', [ExamController::class, 'destroy'])
-                ->middleware(['role:teacher,admin', 'audit']);
+                ->middleware(['role:teacher,admin']);
             Route::post('/{id}/activate', [ExamController::class, 'activate'])
-                ->middleware(['role:teacher,admin', 'audit']);
+                ->middleware(['role:teacher,admin']);
             Route::post('/{id}/deactivate', [ExamController::class, 'deactivate'])
-                ->middleware(['role:teacher,admin', 'audit']);
+                ->middleware(['role:teacher,admin']);
             Route::post('/{id}/start', [ExamController::class, 'startAttempt'])
-                ->middleware(['role:student', 'audit']);
+                ->middleware(['role:student']);
             Route::post('/attempts/{attemptId}/submit', [ExamController::class, 'submitAttempt'])
-                ->middleware(['role:student', 'audit']);
+                ->middleware(['role:student']);
             Route::post('/attempts/{attemptId}/cheat', [ExamController::class, 'reportCheating'])
                 ->middleware(['role:student']);
             Route::get('/{id}/stats', [ExamController::class, 'getExamStats'])
@@ -379,44 +348,35 @@ Route::prefix('v1')->group(function () {
             Route::prefix('users')->group(function () {
                 Route::get('/', [AdminController::class, 'getUsers'])
                     ->middleware('cache.api');
-                Route::post('/', [AdminController::class, 'createUser'])
-                    ->middleware('audit');
+                Route::post('/', [AdminController::class, 'createUser']);
                 Route::post('/import', [AdminController::class, 'importUsers'])
-                    ->middleware(['audit', 'throttle:5,1']);
+                    ->middleware(['throttle:5,1']);
                 Route::get('/export', [AdminController::class, 'exportUsers']);
                 Route::get('/{id}', [AdminController::class, 'getUser'])
                     ->middleware('cache.api');
-                Route::put('/{id}', [AdminController::class, 'updateUser'])
-                    ->middleware('audit');
-                Route::delete('/{id}', [AdminController::class, 'deleteUser'])
-                    ->middleware('audit');
-                Route::post('/{id}/activate', [AdminController::class, 'activateUser'])
-                    ->middleware('audit');
-                Route::post('/{id}/deactivate', [AdminController::class, 'deactivateUser'])
-                    ->middleware('audit');
+                Route::put('/{id}', [AdminController::class, 'updateUser']);
+                Route::delete('/{id}', [AdminController::class, 'deleteUser']);
+                Route::post('/{id}/activate', [AdminController::class, 'activateUser']);
+                Route::post('/{id}/deactivate', [AdminController::class, 'deactivateUser']);
             });
             
             Route::prefix('config')->group(function () {
                 Route::get('/', [AdminController::class, 'getConfig'])
                     ->middleware('cache.api');
-                Route::put('/', [AdminController::class, 'updateConfig'])
-                    ->middleware('audit');
+                Route::put('/', [AdminController::class, 'updateConfig']);
             });
             
             Route::prefix('periods')->group(function () {
                 Route::get('/', [AdminController::class, 'getPeriods'])
                     ->middleware('cache.api');
-                Route::post('/', [AdminController::class, 'createPeriod'])
-                    ->middleware('audit');
-                Route::put('/{id}', [AdminController::class, 'updatePeriod'])
-                    ->middleware('audit');
-                Route::delete('/{id}', [AdminController::class, 'deletePeriod'])
-                    ->middleware('audit');
+                Route::post('/', [AdminController::class, 'createPeriod']);
+                Route::put('/{id}', [AdminController::class, 'updatePeriod']);
+                Route::delete('/{id}', [AdminController::class, 'deletePeriod']);
             });
             
             Route::prefix('backup')->group(function () {
                 Route::post('/', [AdminController::class, 'createBackup'])
-                    ->middleware(['audit', 'throttle:3,60']);
+                    ->middleware(['throttle:3,60']);
                 Route::get('/last', [AdminController::class, 'getLastBackup'])
                     ->middleware('cache.api');
                 Route::get('/download/{filename}', [AdminController::class, 'downloadBackup']);
@@ -426,15 +386,13 @@ Route::prefix('v1')->group(function () {
                 Route::get('/', [SystemTranslationController::class, 'index'])
                     ->middleware('cache.api');
                 Route::post('/', [SystemTranslationController::class, 'store'])
-                    ->middleware(['audit', 'throttle:60,1']);
+                    ->middleware(['throttle:60,1']);
                 Route::post('/bulk', [SystemTranslationController::class, 'bulkUpdate'])
-                    ->middleware(['audit', 'throttle:30,1']);
-                Route::delete('/{id}', [SystemTranslationController::class, 'destroy'])
-                    ->middleware('audit');
+                    ->middleware(['throttle:30,1']);
+                Route::delete('/{id}', [SystemTranslationController::class, 'destroy']);
             });
 
-            Route::post('/achievements/sync', [GamificationController::class, 'sync'])
-                ->middleware('audit');
+            Route::post('/achievements/sync', [GamificationController::class, 'sync']);
         });
 
     // ============================================================
@@ -455,12 +413,9 @@ Route::prefix('v1')->group(function () {
     Route::prefix('calendar')->middleware(['role:teacher,admin'])->group(function () {
         Route::get('/', [AcademicEventController::class, 'index'])
             ->middleware('cache.api');
-        Route::post('/', [AcademicEventController::class, 'store'])
-            ->middleware('audit');
-        Route::put('/{id}', [AcademicEventController::class, 'update'])
-            ->middleware('audit');
-        Route::delete('/{id}', [AcademicEventController::class, 'destroy'])
-            ->middleware('audit');
+        Route::post('/', [AcademicEventController::class, 'store']);
+        Route::put('/{id}', [AcademicEventController::class, 'update']);
+        Route::delete('/{id}', [AcademicEventController::class, 'destroy']);
     });
 
     // ============================================================
@@ -471,9 +426,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/config', [PushSubscriptionController::class, 'config'])
             ->middleware('cache.api');
         Route::post('/subscribe', [PushSubscriptionController::class, 'store'])
-            ->middleware(['audit', 'throttle:10,1']);
-        Route::post('/unsubscribe', [PushSubscriptionController::class, 'destroy'])
-            ->middleware('audit');
+            ->middleware(['throttle:10,1']);
+        Route::post('/unsubscribe', [PushSubscriptionController::class, 'destroy']);
         Route::post('/test', [PushSubscriptionController::class, 'test'])
             ->middleware('throttle:5,1');
     });

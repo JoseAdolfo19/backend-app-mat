@@ -83,12 +83,6 @@ class AdminController extends Controller
             'provider' => 'email'
         ]);
 
-        $user->logAudit('user.admin_created', null, [
-            'full_name' => $user->full_name,
-            'email' => $user->email,
-            'role' => $validated['role'],
-        ]);
-
         if ($validated['role'] === Role::STUDENT) {
             StudentProfile::create([
                 'id' => Str::uuid(),
@@ -132,7 +126,6 @@ class AdminController extends Controller
 
         $oldValues = $user->only(array_keys($validated));
         $user->update($validated);
-        $user->logAudit('user.admin_updated', $oldValues, $validated);
 
         return response()->json([
             'message' => __('user_updated'),
@@ -166,7 +159,6 @@ class AdminController extends Controller
             ], 403);
         }
 
-        $user->logAudit('user.admin_deleted', $user->only('id', 'full_name', 'email'), null);
         $user->delete();
 
         return response()->json([
@@ -178,7 +170,6 @@ class AdminController extends Controller
     {
         $user = User::findOrFail($id);
         $user->update(['is_active' => true]);
-        $user->logAudit('user.admin_activated', ['is_active' => false], ['is_active' => true]);
 
         return response()->json([
             'message' => __('user_activated')
@@ -219,8 +210,6 @@ class AdminController extends Controller
         if (method_exists($user, 'tokens')) {
             $user->tokens()->delete();
         }
-
-        $user->logAudit('user.admin_deactivated', ['is_active' => true], ['is_active' => false]);
 
         return response()->json([
             'message' => __('user_deactivated')

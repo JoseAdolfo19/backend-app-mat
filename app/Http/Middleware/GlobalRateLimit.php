@@ -11,8 +11,11 @@ class GlobalRateLimit
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $maxAttempts = 60;
-        $decayMinutes = 1;
+        // 60 req/min resultaba insuficiente: la app emite entre 3 y 6 llamadas
+        // por navegación, con lo que ~10 páginas por minuto agotaban el cupo y
+        // el usuario veía errores 429 en uso normal. Ver config/ratelimit.php.
+        $maxAttempts = (int) config('ratelimit.global.max_attempts', 120);
+        $decayMinutes = (int) config('ratelimit.global.decay_minutes', 1);
         $limiterKey = $this->resolveLimiterKey($request);
 
         if (RateLimiter::tooManyAttempts($limiterKey, $maxAttempts)) {

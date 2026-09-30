@@ -11,8 +11,11 @@ class ApiRateLimit
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $maxAttempts = 60;
-        $decayMinutes = 1;
+        // Alineado con GlobalRateLimit. Con 60 req/min el límite global se
+        // alcanzaba durante la navegación normal (3-6 llamadas por página) y
+        // devolvía 429. Ver config/ratelimit.php.
+        $maxAttempts = (int) config('ratelimit.api.max_attempts', 120);
+        $decayMinutes = (int) config('ratelimit.api.decay_minutes', 1);
         $limiterKey = $this->resolveLimiterKey($request);
 
         if (RateLimiter::tooManyAttempts($limiterKey, $maxAttempts)) {

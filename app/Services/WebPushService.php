@@ -50,7 +50,7 @@ class WebPushService
                         'TTL' => 86400,
                         'urgency' => 'normal',
                         'VAPID' => [
-                            'subject' => 'mailto:' . (config('services.webpush.subject_email') ?? 'admin@mathflow.com'),
+                            'subject' => 'mailto:' . (config('services.webpush.subject_email') ?? 'admin@mentematica.com'),
                             'publicKey' => $this->publicKey(),
                             'privateKey' => $this->privateKey(),
                         ],
@@ -80,7 +80,7 @@ class WebPushService
     {
         $auth = [
             'VAPID' => [
-                'subject' => 'mailto:' . (config('services.webpush.subject_email') ?? 'admin@mathflow.com'),
+                'subject' => 'mailto:' . (config('services.webpush.subject_email') ?? 'admin@mentematica.com'),
                 'publicKey' => $this->publicKey(),
                 'privateKey' => $this->privateKey(),
             ],

@@ -533,7 +533,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/health', function () {
         return response()->json([
             'status' => 'healthy',
-            'message' => 'KawsayMath API is running',
+            'message' => 'Mentemática API is running',
             'version' => 'v1',
             'timestamp' => now()
         ]);

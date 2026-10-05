@@ -377,7 +377,7 @@ class AuthController extends Controller
         try {
             Mail::raw("Tu código de verificación es: {$code}\n\nEste código expira en 10 minutos.", function ($message) use ($user) {
                 $message->to($user->email)
-                    ->subject('Verifica tu correo - KawsayMath');
+                    ->subject('Verifica tu correo - Mentemática');
             });
         } catch (\Exception $e) {
             report($e);

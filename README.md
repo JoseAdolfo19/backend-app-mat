@@ -1,6 +1,6 @@
-# KawsayMath Backend
+# Mentemática Backend
 
-API backend de KawsayMath, una plataforma educativa de matemáticas con gestión de contenidos, evaluaciones, seguimiento académico, gamificación y comunicación entre estudiantes, docentes, familias y administración.
+API backend de Mentemática, una plataforma educativa de matemáticas con gestión de contenidos, evaluaciones, seguimiento académico, gamificación y comunicación entre estudiantes, docentes, familias y administración.
 
 ## Stack
 
@@ -163,6 +163,6 @@ storage/                  Logs, caché y archivos generados
 
 ## Despliegue
 
-El despliegue debe configurar el entorno de producción fuera del repositorio, ejecutar migraciones con una estrategia controlada, construir recursos, configurar el worker de cola y servir `public/` como raíz web. Revisa los archivos de infraestructura disponibles en `deploy/` y adapta dominios, procesos, permisos y variables a tu proveedor.
+El despliegue debe configurar el entorno de producción fuera del repositorio, ejecutar migraciones con una estrategia controlada, construir recursos, configurar el worker de cola y servir `public/` como raíz web. Este proyecto se despliega en cPanel: el document root debe apuntar a `public/`, el dominio es `api.mentematica.com` y el certificado se emite con AutoSSL.
 
 Nunca habilites `APP_DEBUG=true` en producción ni publiques archivos `.env`, tokens, claves privadas, dumps de base de datos o credenciales de servicios.

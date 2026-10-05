@@ -12,4 +12,4 @@ Schedule::call(function () {
 })->daily()->at('02:00');
 
 // Respaldo automático de la base de datos (diario) + limpieza de respaldos viejos
-Schedule::command('kawsaymath:backup --prune')->daily()->at('03:00');
+Schedule::command('mentematica:backup --prune')->daily()->at('03:00');

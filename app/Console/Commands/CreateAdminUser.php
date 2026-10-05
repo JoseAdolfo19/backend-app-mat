@@ -11,12 +11,12 @@ use Illuminate\Support\Str;
 
 class CreateAdminUser extends Command
 {
-    protected $signature = 'kawsaymath:create-admin
+    protected $signature = 'mentematica:create-admin
         {--email= : Email del administrador}
         {--name= : Nombre completo}
         {--password= : Contraseña (si no se provee, se genera una aleatoria)}';
 
-    protected $description = 'Crear un usuario administrador para KawsayMath';
+    protected $description = 'Crear un usuario administrador para Mentemática';
 
     public function handle(): int
     {

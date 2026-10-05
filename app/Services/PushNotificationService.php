@@ -73,7 +73,7 @@ class PushNotificationService
                 'android' => [
                     'priority' => 'high',
                     'notification' => [
-                        'channel_id' => 'mathflow_default',
+                        'channel_id' => 'mentematica_default',
                     ],
                 ],
                 'apns' => [

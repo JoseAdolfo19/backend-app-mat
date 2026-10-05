@@ -224,7 +224,7 @@ class AdminController extends Controller
 
         if (!$config) {
             return response()->json([
-                'institution_name' => 'KawsayMath Education',
+                'institution_name' => 'Mentemática',
                 'primary_color' => '#004AC6',
                 'secondary_color' => '#006C49',
             ]);
@@ -242,7 +242,7 @@ class AdminController extends Controller
         $config = InstitutionConfig::first();
 
         return response()->json([
-            'institution_name' => $config?->institution_name ?? 'KawsayMath Education',
+            'institution_name' => $config?->institution_name ?? 'Mentemática',
             'primary_color' => $config?->primary_color ?? '#004AC6',
             'secondary_color' => $config?->secondary_color ?? '#006C49',
             'tertiary_color' => $config?->tertiary_color ?? null,
@@ -256,7 +256,7 @@ class AdminController extends Controller
     {
         $config = InstitutionConfig::first() ?? InstitutionConfig::create([
             'id' => Str::uuid(),
-            'institution_name' => 'KawsayMath Education'
+            'institution_name' => 'Mentemática'
         ]);
 
         $validated = $request->validate([

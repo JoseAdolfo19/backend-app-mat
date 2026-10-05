@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 class DatabaseBackup extends Command
 {
-    protected $signature = 'kawsaymath:backup
+    protected $signature = 'mentematica:backup
         {--prune : Elimina respaldos viejos (conserva el más reciente de cada día)}';
 
     protected $description = 'Genera un respaldo de la base de datos MySQL';

@@ -17,7 +17,7 @@ class AdminUserSeeder extends Seeder
             ['email' => 'admin@mathflow.com'],
             [
                 'id' => Str::uuid(),
-                'full_name' => 'Administrador KawsayMath',
+                'full_name' => 'Administrador Mentemática',
                 'password' => 'admin123456',
                 'role_id' => $adminRole->id,
                 'is_active' => true,

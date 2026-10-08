@@ -9,6 +9,7 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
+/** Prepara resultados de evaluaciones como una hoja de cálculo localizada. */
 class GradesExport implements FromCollection, WithHeadings, WithMapping, WithStyles
 {
     private const HEADINGS = [
@@ -23,21 +24,25 @@ class GradesExport implements FromCollection, WithHeadings, WithMapping, WithSty
         'qu' => ['completed' => 'Tukuy', 'pending' => 'Wanalla'],
     ];
 
+    /** Recibe las filas y el idioma de los encabezados y estados. */
     public function __construct(
         private Collection $rows,
         private string $lang = 'es'
     ) {}
 
+    /** Devuelve las filas que procesará la exportación. */
     public function collection(): Collection
     {
         return $this->rows;
     }
 
+    /** Encabezados de la hoja para el idioma elegido, con español como respaldo. */
     public function headings(): array
     {
         return self::HEADINGS[$this->lang] ?? self->HEADINGS['es'];
     }
 
+    /** Convierte un resultado en columnas de exportación y añade su estado si existe. */
     public function map($row): array
     {
         $status = self::STATUS[$this->lang] ?? self::STATUS['es'];
@@ -70,6 +75,7 @@ class GradesExport implements FromCollection, WithHeadings, WithMapping, WithSty
         return $result;
     }
 
+    /** Aplica formato de negrita a la fila de encabezados. */
     public function styles(Worksheet $sheet): array
     {
         return [

@@ -5,13 +5,19 @@ namespace App\Console\Commands;
 use App\Models\InstitutionConfig;
 use Illuminate\Console\Command;
 
+/**
+ * Genera un volcado MySQL y, opcionalmente, conserva solo el respaldo diario más reciente.
+ */
 class DatabaseBackup extends Command
 {
-    protected $signature = 'mentematica:backup
+    protected $signature = 'aulamate:backup
         {--prune : Elimina respaldos viejos (conserva el más reciente de cada día)}';
 
     protected $description = 'Genera un respaldo de la base de datos MySQL';
 
+    /**
+     * Ejecuta mysqldump, registra la fecha del respaldo y aplica la limpieza solicitada.
+     */
     public function handle(): int
     {
         $dbConfig = config('database.connections.mysql');
@@ -77,6 +83,9 @@ class DatabaseBackup extends Command
         return self::SUCCESS;
     }
 
+    /**
+     * Elimina respaldos duplicados del mismo día y mantiene el archivo más reciente.
+     */
     private function pruneOldBackups(string $backupPath): void
     {
         $files = glob($backupPath . '/backup_*.sql');
@@ -104,6 +113,9 @@ class DatabaseBackup extends Command
         }
     }
 
+    /**
+     * Resuelve el ejecutable mysqldump desde la configuración o el PATH del sistema.
+     */
     private function resolveMysqldumpBinary(): string
     {
         $binaryPath = config('database.connections.mysql.dump.dump_binary_path', '');

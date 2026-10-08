@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/** Evaluación creada por un docente, opcionalmente ligada a una lección. */
 class Evaluation extends Model
 {
     use HasUuids, SoftDeletes;
@@ -55,37 +56,44 @@ class Evaluation extends Model
     const DIFFICULTY_ADVANCED = 'advanced';
 
     // ========== RELACIONES ==========
+    /** Docente que creó la evaluación. */
     public function teacher()
     {
         return $this->belongsTo(User::class, 'teacher_id');
     }
 
+    /** Lección asociada a la evaluación, si existe. */
     public function lesson()
     {
         return $this->belongsTo(Lesson::class);
     }
 
+    /** Preguntas incluidas en la evaluación. */
     public function questions()
     {
         return $this->hasMany(Question::class);
     }
 
+    /** Resultados obtenidos por los estudiantes. */
     public function results()
     {
         return $this->hasMany(EvaluationResult::class);
     }
 
     // ========== SCOPES ==========
+    /** Filtra las evaluaciones publicadas. */
     public function scopePublished($query)
     {
         return $query->where('is_published', true);
     }
 
+    /** Filtra las evaluaciones por tipo. */
     public function scopeByType($query, $type)
     {
         return $query->where('type', $type);
     }
 
+    /** Filtra las evaluaciones por dificultad. */
     public function scopeByDifficulty($query, $difficulty)
     {
         return $query->where('difficulty', $difficulty);

@@ -5,8 +5,14 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Asigna identificadores DNI secuenciales a las cuentas con rol de estudiante.
+ */
 class DniSeeder extends Seeder
 {
+    /**
+     * Actualiza el DNI de cada estudiante existente comenzando por 70000001.
+     */
     public function run(): void
     {
         $students = DB::table('users')

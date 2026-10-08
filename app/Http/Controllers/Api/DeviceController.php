@@ -8,6 +8,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
+/**
+ * Registra, elimina y lista los tokens de notificación push del usuario actual.
+ */
 class DeviceController extends Controller
 {
     /**

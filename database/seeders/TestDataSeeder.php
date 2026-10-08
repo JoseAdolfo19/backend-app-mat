@@ -18,6 +18,9 @@ use App\Models\Notification;
 use App\Models\InstitutionConfig;
 use Illuminate\Support\Str;
 
+/**
+ * Construye un conjunto coherente de usuarios y actividad académica para pruebas.
+ */
 class TestDataSeeder extends Seeder
 {
     private array $teachers = [];
@@ -26,6 +29,9 @@ class TestDataSeeder extends Seeder
     private array $evaluations = [];
     private array $questions = [];
 
+    /**
+     * Orquesta la creación de cuentas, contenidos, actividad y configuración de prueba.
+     */
     public function run(): void
     {
         $this->command->info('Ingresando datos de prueba...');
@@ -45,6 +51,9 @@ class TestDataSeeder extends Seeder
         $this->command->info('Datos de prueba ingresados correctamente.');
     }
 
+    /**
+     * Crea los docentes de muestra y sus perfiles cuando aún no existen.
+     */
     private function createTeachers(): void
     {
         $teacherRole = Role::where('name', Role::TEACHER)->first();
@@ -85,7 +94,7 @@ class TestDataSeeder extends Seeder
                     'role_id' => $teacherRole->id,
                     'is_active' => true,
                     'provider' => 'email',
-                    'institution' => 'Instituto Mentemática',
+                    'institution' => 'Instituto Aulamate',
                     'email_verified_at' => now(),
                 ]);
 
@@ -105,6 +114,9 @@ class TestDataSeeder extends Seeder
         $this->command->info('  3 profesores creados');
     }
 
+    /**
+     * Crea estudiantes de muestra y sus perfiles académicos iniciales.
+     */
     private function createStudents(): void
     {
         $studentRole = Role::where('name', Role::STUDENT)->first();
@@ -135,7 +147,7 @@ class TestDataSeeder extends Seeder
                     'role_id' => $studentRole->id,
                     'is_active' => true,
                     'provider' => 'email',
-                    'institution' => 'Instituto Mentemática',
+                    'institution' => 'Instituto Aulamate',
                     'grade' => $data['grade'],
                     'email_verified_at' => now(),
                 ]);
@@ -158,6 +170,9 @@ class TestDataSeeder extends Seeder
         $this->command->info('  10 estudiantes creados');
     }
 
+    /**
+     * Registra las lecciones de prueba y adjunta recursos según su unidad.
+     */
     private function createLessons(): void
     {
         $teacher = $this->teachers[0];
@@ -311,6 +326,9 @@ class TestDataSeeder extends Seeder
         $this->command->info('  12 lecciones creadas y publicadas');
     }
 
+    /**
+     * Devuelve los recursos de ejemplo asociados a una unidad curricular.
+     */
     private function generateResources(string $unit): array
     {
         $resources = [
@@ -331,6 +349,9 @@ class TestDataSeeder extends Seeder
         return $resources[$unit] ?? [];
     }
 
+    /**
+     * Crea las evaluaciones de muestra vinculadas a las lecciones correspondientes.
+     */
     private function createEvaluations(): void
     {
         $teacher = $this->teachers[0];
@@ -438,6 +459,9 @@ class TestDataSeeder extends Seeder
         $this->command->info('  8 evaluaciones creadas y publicadas');
     }
 
+    /**
+     * Registra las preguntas predefinidas y las asocia a cada evaluación de prueba.
+     */
     private function createQuestions(): void
     {
         $questionsPerEvaluation = [
@@ -810,6 +834,9 @@ class TestDataSeeder extends Seeder
         $this->command->info('  40 preguntas creadas (5 por evaluacion)');
     }
 
+    /**
+     * Genera registros aleatorios de avance de lecciones para los estudiantes de muestra.
+     */
     private function createLessonProgress(): void
     {
         $count = 0;
@@ -842,6 +869,9 @@ class TestDataSeeder extends Seeder
         $this->command->info("  {$count} registros de progreso de lecciones creados");
     }
 
+    /**
+     * Genera resultados y respuestas para intentos de evaluaciones de los estudiantes.
+     */
     private function createEvaluationResults(): void
     {
         $count = 0;
@@ -902,6 +932,9 @@ class TestDataSeeder extends Seeder
         $this->command->info("  {$count} resultados de evaluaciones creados con respuestas");
     }
 
+    /**
+     * Elige una opción incorrecta disponible o usa una respuesta genérica.
+     */
     private function getWrongAnswer(Question $question): string
     {
         if ($question->type === 'multiple_choice' && is_array($question->options)) {
@@ -918,6 +951,9 @@ class TestDataSeeder extends Seeder
         return 'respuesta incorrecta';
     }
 
+    /**
+     * Recalcula en los perfiles los totales, promedios y rachas de actividad.
+     */
     private function refreshStudentProfiles(): void
     {
         $count = 0;
@@ -971,6 +1007,9 @@ class TestDataSeeder extends Seeder
         $this->command->info("  {$count} perfiles de estudiantes actualizados con datos reales");
     }
 
+    /**
+     * Crea los períodos académicos de ejemplo activo e histórico.
+     */
     private function createAcademicPeriods(): void
     {
         AcademicPeriod::create([
@@ -994,13 +1033,16 @@ class TestDataSeeder extends Seeder
         $this->command->info('  2 periodos academicos creados');
     }
 
+    /**
+     * Distribuye notificaciones de muestra entre los usuarios creados por este seeder.
+     */
     private function createNotifications(): void
     {
         $allUsers = array_merge($this->teachers, $this->students);
         $count = 0;
 
         $notificationsData = [
-            ['title' => 'Bienvenido a Mentemática', 'message' => 'Tu cuenta ha sido creada exitosamente. Explora nuestras lecciones de matematicas.', 'type' => Notification::TYPE_SUCCESS],
+            ['title' => 'Bienvenido a Aulamate', 'message' => 'Tu cuenta ha sido creada exitosamente. Explora nuestras lecciones de matematicas.', 'type' => Notification::TYPE_SUCCESS],
             ['title' => 'Nueva leccion disponible', 'message' => 'Se ha publicado una nueva leccion de Algebra: Ecuaciones Lineales.', 'type' => Notification::TYPE_INFO],
             ['title' => 'Recordatorio de evaluacion', 'message' => 'Tienes una evaluacion pendiente que vence en 3 dias. No olvides completarla.', 'type' => Notification::TYPE_WARNING],
             ['title' => 'Calificacion publicada', 'message' => 'Tu profesor ha calificado tu ultimo examen. Revisa tu resultado.', 'type' => Notification::TYPE_INFO],
@@ -1034,11 +1076,14 @@ class TestDataSeeder extends Seeder
         $this->command->info("  {$count} notificaciones creadas");
     }
 
+    /**
+     * Registra la configuración institucional inicial usada por los datos de prueba.
+     */
     private function createInstitutionConfig(): void
     {
         InstitutionConfig::create([
             'id' => Str::uuid(),
-            'institution_name' => 'Instituto Mentemática',
+            'institution_name' => 'Instituto Aulamate',
             'primary_color' => '#004AC6',
             'secondary_color' => '#006C49',
             'logo' => null,

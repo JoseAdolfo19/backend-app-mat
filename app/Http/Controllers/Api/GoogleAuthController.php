@@ -13,8 +13,12 @@ use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Http\Request;
 use Google\Client as GoogleClient;
 
+/**
+ * Autentica usuarios mediante OAuth de Google o la verificación móvil de ID tokens.
+ */
 class GoogleAuthController extends Controller
 {
+    /** Redirige el navegador a Google para seleccionar una cuenta e iniciar sesión. */
     public function redirectToGoogle()
     {
         return Socialite::driver('google')
@@ -22,6 +26,7 @@ class GoogleAuthController extends Controller
             ->redirect();
     }
 
+    /** Procesa el retorno de OAuth y redirige con un código de autenticación temporal. */
     public function handleGoogleCallback()
     {
         try {

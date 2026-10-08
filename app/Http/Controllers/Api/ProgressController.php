@@ -15,6 +15,9 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use App\Services\GamificationService;
 
+/**
+ * Proporciona paneles para estudiantes y docentes, progreso de lecciones, insignias y estadísticas.
+ */
 class ProgressController extends Controller
 {
     /**

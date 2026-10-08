@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
+/** Intento de un estudiante para resolver un examen. */
 class ExamAttempt extends Model
 {
     use HasUuids;
@@ -43,11 +44,13 @@ class ExamAttempt extends Model
     const STATUS_ABANDONED = 'abandoned';
     const STATUS_CHEATING_DETECTED = 'cheating_detected';
 
+    /** Examen que se está intentando resolver. */
     public function exam()
     {
         return $this->belongsTo(Exam::class);
     }
 
+    /** Estudiante que realizó el intento. */
     public function student()
     {
         return $this->belongsTo(User::class, 'student_id');

@@ -7,6 +7,9 @@ use App\Services\GamificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * Expone resúmenes de logros del estudiante y permite sincronizar o revisar logros.
+ */
 class GamificationController extends Controller
 {
     private GamificationService $service;

@@ -7,15 +7,18 @@ use App\Models\LessonProgress;
 use App\Models\EvaluationResult;
 use Illuminate\Support\Facades\DB;
 
+/** Reúne el avance en lecciones y los resultados de evaluación de un estudiante. */
 class StudentProgressPDFExport
 {
     protected $studentId;
 
+    /** Selecciona el estudiante cuyos datos se prepararán para el informe. */
     public function __construct($studentId)
     {
         $this->studentId = $studentId;
     }
 
+    /** Devuelve estudiante, lecciones, evaluaciones y estadísticas de progreso. */
     public function getData()
     {
         $student = User::find($this->studentId);

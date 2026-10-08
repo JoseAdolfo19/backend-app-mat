@@ -8,6 +8,9 @@ use App\Services\WebPushService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * Gestiona suscripciones Web Push del navegador y expone la configuración de entrega.
+ */
 class PushSubscriptionController extends Controller
 {
     private WebPushService $webPush;

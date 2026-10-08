@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
+/** Resultado de un estudiante en una evaluación, con sus respuestas registradas. */
 class EvaluationResult extends Model
 {
     use HasUuids;
@@ -44,27 +45,32 @@ class EvaluationResult extends Model
     const STATUS_FAILED = 'failed';
 
     // ========== RELACIONES ==========
+    /** Estudiante que obtuvo el resultado. */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
+    /** Evaluación a la que corresponde el resultado. */
     public function evaluation()
     {
         return $this->belongsTo(Evaluation::class);
     }
 
+    /** Respuestas asociadas al intento de evaluación. */
     public function studentAnswers()
     {
         return $this->hasMany(StudentAnswer::class);
     }
 
     // ========== SCOPES ==========
+    /** Filtra los resultados completados. */
     public function scopeCompleted($query)
     {
         return $query->where('status', self::STATUS_COMPLETED);
     }
 
+    /** Filtra los resultados pendientes. */
     public function scopePending($query)
     {
         return $query->where('status', self::STATUS_PENDING);

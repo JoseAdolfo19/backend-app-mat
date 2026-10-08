@@ -11,11 +11,15 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
+/**
+ * Permite consultar públicamente el progreso estudiantil tras validar un CAPTCHA.
+ */
 class GuestStudentController extends Controller
 {
     private const CAPTCHA_TTL_SECONDS = 300;
     private const CAPTCHA_MAX_ATTEMPTS = 5;
 
+    /** Valida el CAPTCHA y devuelve el resumen académico del estudiante encontrado. */
     public function lookup(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -181,6 +185,7 @@ class GuestStudentController extends Controller
         return $streak;
     }
 
+    /** Genera un token CAPTCHA cifrado y la imagen correspondiente. */
     public function generateCaptcha(): JsonResponse
     {
         $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';

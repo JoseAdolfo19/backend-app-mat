@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
+/** Entrega de un estudiante asociada a un juego. */
 class GameSubmission extends Model
 {
     use HasUuids;
@@ -33,11 +34,13 @@ class GameSubmission extends Model
         'graded_at' => 'datetime',
     ];
 
+    /** Juego al que corresponde la entrega. */
     public function game()
     {
         return $this->belongsTo(Game::class);
     }
 
+    /** Estudiante que realizó la entrega. */
     public function student()
     {
         return $this->belongsTo(User::class, 'student_id');

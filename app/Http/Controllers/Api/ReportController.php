@@ -22,6 +22,9 @@ use Maatwebsite\Excel\Facades\Excel;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
+/**
+ * Genera informes y exportaciones de rendimiento, evaluaciones, estudiantes y participación.
+ */
 class ReportController extends Controller
 {
     /**
@@ -728,7 +731,7 @@ class ReportController extends Controller
         </style></head>
         <body>
             <div class="header">
-                <h1>Mentemática - Reporte de Rendimiento</h1>
+                <h1>Aulamate - Reporte de Rendimiento</h1>
                 <p>Generado: ' . now()->format('d/m/Y H:i') . '</p>
             </div>
             <div class="summary">
@@ -866,7 +869,7 @@ class ReportController extends Controller
         </style></head>
         <body>
             <div class="header">
-                <h1>Mentemática - Reporte del Estudiante</h1>
+                <h1>Aulamate - Reporte del Estudiante</h1>
                 <p>Generado: ' . now()->format('d/m/Y H:i') . '</p>
             </div>
             <div class="student-info">
@@ -929,7 +932,7 @@ class ReportController extends Controller
         </style></head>
         <body>
             <div class="header">
-                <h1>Mentemática - Calificaciones</h1>
+                <h1>Aulamate - Calificaciones</h1>
                 <p>Generado: ' . now()->format('d/m/Y H:i') . '</p>
             </div>
             <div class="stats-grid">

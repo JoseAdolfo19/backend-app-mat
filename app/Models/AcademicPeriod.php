@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
+/** Período académico al que se asignan los salones. */
 class AcademicPeriod extends Model
 {
     use HasUuids;

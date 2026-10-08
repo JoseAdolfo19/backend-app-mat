@@ -7,6 +7,9 @@ use App\Models\SystemTranslation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
+/**
+ * Gestiona traducciones almacenadas y sirve sobrescrituras en caché para el frontend.
+ */
 class SystemTranslationController extends Controller
 {
     /**

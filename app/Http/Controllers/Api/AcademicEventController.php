@@ -7,6 +7,9 @@ use App\Models\AcademicEvent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * Consulta y administra eventos del calendario académico para usuarios autenticados.
+ */
 class AcademicEventController extends Controller
 {
     /**

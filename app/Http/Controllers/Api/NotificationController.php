@@ -10,6 +10,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
+/**
+ * Consulta y actualiza notificaciones y ofrece utilidades para crear avisos y notificaciones push.
+ */
 class NotificationController extends Controller
 {
     /**

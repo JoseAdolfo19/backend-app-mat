@@ -7,11 +7,13 @@ use App\Models\Notification;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
+/** Envía notificaciones push FCM a dispositivos y crea notificaciones internas. */
 class PushNotificationService
 {
     private string $fcmUrl;
     private string $fcmKey;
 
+    /** Carga las credenciales y el endpoint FCM desde la configuración. */
     public function __construct()
     {
         $this->fcmKey = config('services.fcm.key', '');
@@ -73,7 +75,7 @@ class PushNotificationService
                 'android' => [
                     'priority' => 'high',
                     'notification' => [
-                        'channel_id' => 'mentematica_default',
+                        'channel_id' => 'aulamate_default',
                     ],
                 ],
                 'apns' => [
@@ -99,9 +101,7 @@ class PushNotificationService
         }
     }
 
-    /**
-     * Enviar notificación a múltiples usuarios
-     */
+    /** Envía a varios usuarios y devuelve los totales enviados y fallidos. */
     public function sendToUsers(array $userIds, string $title, string $body, array $data = []): array
     {
         $results = ['sent' => 0, 'failed' => 0];

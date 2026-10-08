@@ -6,11 +6,15 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Atiende solicitudes previas CORS y agrega encabezados para orígenes configurados.
+ */
 class Cors
 {
     private const ALLOWED_METHODS = 'GET, POST, PUT, DELETE, PATCH, OPTIONS';
     private const ALLOWED_HEADERS = 'Content-Type, Authorization, X-Requested-With, Accept, X-Platform';
 
+    /** Responde a solicitudes previas y aplica encabezados CORS a orígenes permitidos. */
     public function handle(Request $request, Closure $next): Response
     {
         $response = $request->getMethod() === 'OPTIONS'

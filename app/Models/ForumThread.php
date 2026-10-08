@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 
+/** Hilo del foro vinculado a una lección y a un docente. */
 class ForumThread extends Model
 {
     use HasUuids;
@@ -25,21 +26,25 @@ class ForumThread extends Model
     const STATUS_OPEN = 'open';
     const STATUS_CLOSED = 'closed';
 
+    /** Docente responsable del hilo. */
     public function teacher()
     {
         return $this->belongsTo(User::class, 'teacher_id');
     }
 
+    /** Lección relacionada con el hilo. */
     public function lesson()
     {
         return $this->belongsTo(Lesson::class);
     }
 
+    /** Publicaciones del hilo. */
     public function posts()
     {
         return $this->hasMany(ForumPost::class, 'thread_id');
     }
 
+    /** Filtra los hilos con estado abierto. */
     public function scopeOpen($query)
     {
         return $query->where('status', self::STATUS_OPEN);

@@ -11,8 +11,14 @@ use App\Models\Evaluation;
 use App\Models\Exam;
 use Illuminate\Database\Seeder;
 
+/**
+ * Genera entregas calificadas para trabajos completados que alimentan los rankings.
+ */
 class RankingSeeder extends Seeder
 {
+    /**
+     * Crea registros faltantes a partir del progreso, resultados y exámenes finalizados.
+     */
     public function run(): void
     {
         $created = 0;

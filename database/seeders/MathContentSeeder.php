@@ -10,8 +10,14 @@ use App\Models\Lesson;
 use App\Models\Evaluation;
 use App\Models\Question;
 
+/**
+ * Carga lecciones y evaluaciones de matemáticas con sus preguntas de práctica.
+ */
 class MathContentSeeder extends Seeder
 {
+    /**
+     * Crea el docente de ejemplo y registra contenido de álgebra, geometría y trigonometría.
+     */
     public function run(): void
     {
         $teacher = User::firstOrCreate(
@@ -506,6 +512,9 @@ class MathContentSeeder extends Seeder
         }
     }
 
+    /**
+     * Devuelve la posición de una lección dentro de las lecciones de su unidad.
+     */
     private function getOrderForLesson(string $unit, int $index, array $lessons): int
     {
         $unitLessons = array_filter($lessons, fn($l) => $l['unit'] === $unit);

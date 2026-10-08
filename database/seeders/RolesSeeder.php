@@ -5,8 +5,14 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Role;
 
+/**
+ * Registra los roles de usuario admitidos por la plataforma.
+ */
 class RolesSeeder extends Seeder
 {
+    /**
+     * Inserta o actualiza los roles del sistema sin duplicarlos por nombre.
+     */
     public function run(): void
     {
         $roles = [

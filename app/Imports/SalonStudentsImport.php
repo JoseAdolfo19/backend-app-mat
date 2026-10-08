@@ -12,22 +12,29 @@ use Illuminate\Support\Str;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
+/** Importa estudiantes desde una hoja, valida sus datos y los matricula en los cursos del salón. */
 class SalonStudentsImport implements ToCollection, WithHeadingRow
 {
+    /** Errores de validación encontrados durante la importación. */
     public array $errors = [];
+
+    /** Cantidad de estudiantes creados correctamente. */
     public int $imported = 0;
 
+    /** Configura el salón, el usuario que matricula y la contraseña de respaldo. */
     public function __construct(
         private Salon $salon,
         private ?string $byUserId = null,
         private string $defaultPassword = ''
     ) {}
 
+    /** Indica que los nombres de columna están en la primera fila. */
     public function headingRow(): int
     {
         return 1;
     }
 
+    /** Valida cada fila; registra errores o crea al estudiante y sus matrículas. */
     public function collection(Collection $rows): void
     {
         $studentRoleId = Role::where('name', Role::STUDENT)->first()?->id;

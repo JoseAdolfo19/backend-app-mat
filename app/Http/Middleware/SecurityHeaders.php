@@ -6,8 +6,12 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Añade encabezados de seguridad del navegador a las respuestas de la aplicación.
+ */
 class SecurityHeaders
 {
+    /** Añade encabezados de seguridad, incluido HSTS para solicitudes seguras. */
     public function handle(Request $request, Closure $next): Response
     {
         $response = $next($request);

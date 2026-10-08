@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
+/** Notificación dentro de la aplicación destinada a un usuario. */
 class Notification extends Model
 {
     use HasUuids;
@@ -33,17 +34,20 @@ class Notification extends Model
     const TYPE_ERROR = 'error';
 
     // ========== RELACIONES ==========
+    /** Usuario destinatario de la notificación. */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
     // ========== SCOPES ==========
+    /** Filtra las notificaciones que todavía no se han leído. */
     public function scopeUnread($query)
     {
         return $query->where('is_read', false);
     }
 
+    /** Filtra las notificaciones por tipo. */
     public function scopeByType($query, $type)
     {
         return $query->where('type', $type);

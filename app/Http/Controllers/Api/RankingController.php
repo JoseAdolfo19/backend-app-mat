@@ -10,6 +10,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Genera clasificaciones estudiantiles a partir de evaluaciones y trabajos calificados.
+ */
 class RankingController extends Controller
 {
     /**

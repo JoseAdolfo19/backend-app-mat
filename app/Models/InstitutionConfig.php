@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
+/** Configuración institucional almacenada para su uso en la aplicación. */
 class InstitutionConfig extends Model
 {
     use HasUuids;

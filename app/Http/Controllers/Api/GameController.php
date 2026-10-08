@@ -14,6 +14,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
+/**
+ * Gestiona juegos de cursos, entregas de estudiantes y su revisión docente.
+ */
 class GameController extends Controller
 {
     private GamificationService $gamification;
@@ -71,6 +74,7 @@ class GameController extends Controller
     // LISTADO
     // ============================================================
 
+    /** Lista los juegos disponibles para el usuario, opcionalmente filtrados por curso. */
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -95,6 +99,7 @@ class GameController extends Controller
         return response()->json(['data' => $query->orderByDesc('created_at')->get()]);
     }
 
+    /** Devuelve un juego y sus entregas a usuarios con acceso al curso. */
     public function show($gameId)
     {
         $game = Game::with(['course:id,name', 'teacher:id,full_name', 'submissions.student:id,full_name,email'])->findOrFail($gameId);
@@ -114,6 +119,7 @@ class GameController extends Controller
     // CRUD (docente dueño del curso / coordinador/director)
     // ============================================================
 
+    /** Crea un juego en un curso al que el usuario actual tenga acceso. */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -152,6 +158,7 @@ class GameController extends Controller
         return response()->json(['message' => 'Juego creado', 'data' => $game], 201);
     }
 
+    /** Actualiza un juego que el docente posee o que el personal puede administrar. */
     public function update(Request $request, $gameId)
     {
         $game = Game::findOrFail($gameId);
@@ -172,6 +179,7 @@ class GameController extends Controller
         return response()->json(['message' => 'Juego actualizado', 'data' => $game]);
     }
 
+    /** Elimina un juego que el usuario actual está autorizado a administrar. */
     public function destroy($gameId)
     {
         $game = Game::findOrFail($gameId);
@@ -186,6 +194,7 @@ class GameController extends Controller
     // COMPROBANTE (estudiante matriculado)
     // ============================================================
 
+    /** Guarda la captura de un estudiante y devuelve su URL pública. */
     public function uploadScreenshot(Request $request, $gameId)
     {
         $game = Game::findOrFail($gameId);
@@ -208,6 +217,7 @@ class GameController extends Controller
         ], 201);
     }
 
+    /** Registra el puntaje o comprobante de participación del estudiante en un juego. */
     public function submit(Request $request, $gameId)
     {
         $game = Game::findOrFail($gameId);
@@ -250,6 +260,7 @@ class GameController extends Controller
     // CALIFICACIÓN (docente dueño / coordinador/director) + XP
     // ============================================================
 
+    /** Aprueba o rechaza una entrega y, al aprobarla, asigna XP según la nota. */
     public function grade(Request $request, $submissionId)
     {
         $submission = GameSubmission::with('game')->findOrFail($submissionId);
@@ -294,6 +305,7 @@ class GameController extends Controller
     // CATÁLOGO de cursos para el docente
     // ============================================================
 
+    /** Lista los cursos del docente autenticado o los cursos disponibles para coordinación. */
     public function teacherCourses()
     {
         $user = Auth::user();

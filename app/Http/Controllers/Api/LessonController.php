@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Gestiona el contenido y publicación de lecciones, recursos y recomendaciones de progreso.
+ */
 class LessonController extends Controller
 {
     /**

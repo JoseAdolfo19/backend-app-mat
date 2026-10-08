@@ -8,8 +8,14 @@ use App\Models\User;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
 
+/**
+ * Carga exámenes de demostración y sus preguntas de opción múltiple.
+ */
 class ExamSeeder extends Seeder
 {
+    /**
+     * Busca al docente de ejemplo y crea sus exámenes con preguntas asociadas.
+     */
     public function run(): void
     {
         $teacher = User::where('email', 'profesor.math@mathflow.com')->first();

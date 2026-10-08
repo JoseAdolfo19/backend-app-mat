@@ -5,8 +5,12 @@ namespace App\Http\Middleware;
 use Illuminate\Auth\Middleware\Authenticate as Middleware;
 use Illuminate\Http\Request;
 
+/**
+ * Autentica solicitudes e impide que cuentas desactivadas sigan usando sus tokens.
+ */
 class Authenticate extends Middleware
 {
+    /** Indica el destino de redirección para solicitudes no JSON sin autenticar. */
     protected function redirectTo(Request $request): ?string
     {
         if ($request->expectsJson() || $request->is('api/*')) {

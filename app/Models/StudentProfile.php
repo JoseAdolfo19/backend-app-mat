@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
+/** Perfil académico y de gamificación de un usuario estudiante. */
 class StudentProfile extends Model
 {
     use HasUuids;
@@ -105,6 +106,7 @@ class StudentProfile extends Model
     }
 
     // ========== RELACIONES ==========
+    /** Usuario al que corresponde el perfil. */
     public function user()
     {
         return $this->belongsTo(User::class);

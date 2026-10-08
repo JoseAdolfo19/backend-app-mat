@@ -7,8 +7,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Aplica a las solicitudes API el límite configurado por usuario o dirección IP.
+ */
 class ApiRateLimit
 {
+    /** Aplica el límite de API y agrega encabezados de uso a la respuesta. */
     public function handle(Request $request, Closure $next): Response
     {
         // Alineado con GlobalRateLimit. Con 60 req/min el límite global se

@@ -4,13 +4,18 @@ namespace App\Http\Requests\Auth;
 
 use Illuminate\Foundation\Http\FormRequest;
 
+/**
+ * Valida los datos de cuenta y los campos específicos del rol para el registro.
+ */
 class RegisterRequest extends FormRequest
 {
+    /** Autoriza la solicitud para que se apliquen sus reglas de validación. */
     public function authorize(): bool
     {
         return true;
     }
 
+    /** Define las reglas de registro de cuenta y los campos específicos del rol. */
     public function rules(): array
     {
         return [
@@ -26,6 +31,7 @@ class RegisterRequest extends FormRequest
         ];
     }
 
+    /** Devuelve los mensajes traducidos para errores de validación del registro. */
     public function messages(): array
     {
         return [

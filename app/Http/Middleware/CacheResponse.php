@@ -6,8 +6,12 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Añade validadores de caché privada a respuestas GET exitosas y gestiona coincidencias ETag.
+ */
 class CacheResponse
 {
+    /** Agrega ETag y encabezados de caché; devuelve 304 si el ETag coincide. */
     public function handle(Request $request, Closure $next): Response
     {
         $response = $next($request);

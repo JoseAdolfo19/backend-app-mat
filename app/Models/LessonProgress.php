@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
+/** Estado y avance de un usuario en una lección. */
 class LessonProgress extends Model
 {
     use HasUuids;
@@ -36,27 +37,32 @@ class LessonProgress extends Model
     const STATUS_COMPLETED = 'completed';
 
     // ========== RELACIONES ==========
+    /** Usuario cuyo progreso registra este modelo. */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
+    /** Lección cuyo progreso se registra. */
     public function lesson()
     {
         return $this->belongsTo(Lesson::class);
     }
 
     // ========== SCOPES ==========
+    /** Filtra el progreso aún no iniciado. */
     public function scopeNotStarted($query)
     {
         return $query->where('status', self::STATUS_NOT_STARTED);
     }
 
+    /** Filtra el progreso actualmente en curso. */
     public function scopeInProgress($query)
     {
         return $query->where('status', self::STATUS_IN_PROGRESS);
     }
 
+    /** Filtra el progreso completado. */
     public function scopeCompleted($query)
     {
         return $query->where('status', self::STATUS_COMPLETED);

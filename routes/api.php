@@ -33,10 +33,12 @@ use App\Http\Controllers\Api\GameController;
 */
 
 Route::prefix('v1')->group(function () {
+    // Todas las rutas de esta sección quedan bajo el prefijo /api/v1.
 
     // ============================================================
     // RUTAS PÚBLICAS (No requieren autenticación)
     // ============================================================
+    // Incluye acceso y recuperación de cuenta; las rutas sensibles declaran su propio throttle.
 
     Route::prefix('auth')->group(function () {
         
@@ -66,11 +68,12 @@ Route::prefix('v1')->group(function () {
     // ============================================================
     // RUTAS PROTEGIDAS (Requieren autenticación con Sanctum)
     // ============================================================
+    // Este grupo exige token Sanctum, cuenta activa y el limitador rate.limit.
 
     Route::middleware(['auth:sanctum', 'auth.active', 'rate.limit'])->group(function () {
 
         // ============================================================
-        // AI CHAT (Proxy seguro - protege la API key de Groq)
+        // AI CHAT: proxy autenticado; generar lecciones requiere rol docente o administrador.
         // ============================================================
         Route::post('/ai/chat', [AiController::class, 'chat'])
             ->middleware('throttle:20,1');
@@ -78,7 +81,7 @@ Route::prefix('v1')->group(function () {
             ->middleware(['role:teacher,admin', 'throttle:10,1']);
 
         // ============================================================
-        // PERFIL DE USUARIO (Todos los roles)
+        // PERFIL DE USUARIO: operaciones de cuenta disponibles a cualquier usuario autenticado.
         // ============================================================
         
         Route::prefix('user')->group(function () {
@@ -101,7 +104,7 @@ Route::prefix('v1')->group(function () {
         });
         
         // ============================================================
-        // DISPOSITIVOS / PUSH NOTIFICATIONS
+        // DISPOSITIVOS: administración de tokens push del usuario autenticado.
         // ============================================================
         
         Route::prefix('devices')->group(function () {
@@ -112,7 +115,7 @@ Route::prefix('v1')->group(function () {
         });
         
         // ============================================================
-        // NOTIFICACIONES (Todos los roles)
+        // NOTIFICACIONES: consulta y gestión de avisos del usuario autenticado.
         // ============================================================
         
         Route::prefix('notifications')->group(function () {
@@ -127,7 +130,7 @@ Route::prefix('v1')->group(function () {
         });
         
         // ============================================================
-        // DASHBOARDS (Según rol) — con soporte para mobile
+        // DASHBOARDS: acceso por rol según cada ruta; incluye vistas completas y ligeras para móvil.
         // ============================================================
         
         Route::prefix('dashboard')->group(function () {
@@ -144,7 +147,7 @@ Route::prefix('v1')->group(function () {
         });
         
         // ============================================================
-        // PROGRESO Y ESTADÍSTICAS (Todos los roles)
+        // PROGRESO: estadísticas personales disponibles bajo la autenticación general del grupo.
         // ============================================================
         
         Route::prefix('progress')->group(function () {
@@ -157,7 +160,7 @@ Route::prefix('v1')->group(function () {
         });
         
         // ============================================================
-        // LECCIONES (Todos los roles)
+        // LECCIONES: lectura autenticada; escritura y gestión reservadas al rol docente.
         // ============================================================
         
         Route::prefix('lessons')->group(function () {
@@ -197,7 +200,7 @@ Route::prefix('v1')->group(function () {
         });
         
         // ============================================================
-        // EVALUACIONES (Todos los roles)
+        // EVALUACIONES: lectura autenticada; envío para estudiantes y gestión para docentes.
         // ============================================================
         
         Route::prefix('evaluations')->group(function () {
@@ -236,7 +239,7 @@ Route::prefix('v1')->group(function () {
         });
         
         // ============================================================
-        // EXÁMENES (Teacher-created tests, separate from evaluations)
+        // EXÁMENES: pruebas independientes; acciones de creación/gestión requieren docente o admin.
         // ============================================================
 
         Route::prefix('exams')->group(function () {
@@ -265,7 +268,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // ============================================================
-        // SUBMITTED WORKS (Student work submissions)
+        // TRABAJOS ENTREGADOS: acceso autenticado; entrega para estudiantes y calificación para docentes/admin.
         // ============================================================
 
         Route::get('/submitted-works', [SubmittedWorkController::class, 'index']);
@@ -281,7 +284,7 @@ Route::prefix('v1')->group(function () {
             ->middleware(['role:teacher,admin', 'throttle:10,1']);
 
         // ============================================================
-        // RANKINGS
+        // RANKINGS: consulta de posiciones dentro del grupo autenticado.
         // ============================================================
 
         Route::get('/rankings/course', [RankingController::class, 'courseRanking']);
@@ -289,7 +292,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/rankings/my-position', [RankingController::class, 'myPosition']);
 
         // ============================================================
-        // REPORTES (Docentes y Admin)
+        // REPORTES: todo el prefijo queda restringido a docentes y administradores.
         // ============================================================
         
         Route::prefix('reports')->middleware(['role:teacher,admin'])->group(function () {
@@ -330,7 +333,7 @@ Route::prefix('v1')->group(function () {
         });
         
         // ============================================================
-        // PADRES DE FAMILIA (Solo Parent)
+        // FAMILIAS: consulta de hijos y su actividad; requiere rol parent.
         // ============================================================
 
         Route::prefix('parent')->middleware('role:parent')->group(function () {
@@ -340,7 +343,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // ============================================================
-        // ADMINISTRACIÓN (Solo Admin)
+        // ADMINISTRACIÓN: todas las rutas /admin requieren rol admin, además de la autenticación general.
         // ============================================================
         
         Route::prefix('admin')->middleware(['role:admin'])->group(function () {
@@ -396,7 +399,7 @@ Route::prefix('v1')->group(function () {
         });
 
     // ============================================================
-    // GAMIFICACIÓN (Estudiante autenticado)
+    // GAMIFICACIÓN: prefijo con rol student; cada endpoint gestiona logros del estudiante.
     // ============================================================
 
     Route::prefix('gamification')->middleware(['role:student'])->group(function () {
@@ -407,7 +410,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // ============================================================
-    // CALENDARIO ACADÉMICO (Docente/Admin)
+    // CALENDARIO: prefijo limitado a docentes/admin para gestionar eventos académicos.
     // ============================================================
 
     Route::prefix('calendar')->middleware(['role:teacher,admin'])->group(function () {
@@ -419,7 +422,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // ============================================================
-    // PUSH NOTIFICATIONS WEB (Autenticado)
+    // PUSH WEB: consulta de configuración y gestión de suscripciones; throttle por operación.
     // ============================================================
 
     Route::prefix('push')->group(function () {
@@ -433,7 +436,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // ============================================================
-    // MENSAJERÍA DOCENTE-ESTUDIANTE (Autenticado, anti-IDOR)
+    // MENSAJERÍA: operaciones de conversación con límite de 30 solicitudes por minuto.
     // ============================================================
 
     Route::prefix('conversations')->middleware(['throttle:30,1'])->group(function () {
@@ -444,7 +447,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // ============================================================
-    // FORO DE CLASE (Docentes crean hilos, estudiantes comentan)
+    // FORO: hilos y publicaciones con límite de 30 solicitudes por minuto.
     // ============================================================
 
     Route::prefix('forum')->middleware(['throttle:30,1'])->group(function () {
@@ -456,7 +459,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // ============================================================
-    // SALONES, CURSOS Y LECCIONES POR SALÓN (Coordinador/Docente/Estudiante)
+    // SALONES: gestión de salones, cursos y alumnos; límite de 60 solicitudes por minuto.
     // ============================================================
 
     Route::prefix('salones')->middleware(['throttle:60,1'])->group(function () {
@@ -480,7 +483,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/catalog/teachers', [SalonController::class, 'teachers']);
     Route::get('/catalog/students', [SalonController::class, 'students']);
 
-    // Cursos (lecciones, matrícula)
+    // CURSOS: edición, lecciones y matrícula; el grupo aplica límite de 60 solicitudes por minuto.
     Route::prefix('courses')->middleware(['throttle:60,1'])->group(function () {
         Route::put('/{courseId}', [SalonController::class, 'updateCourse']);
         Route::delete('/{courseId}', [SalonController::class, 'destroyCourse']);
@@ -497,7 +500,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/enroll-by-code', [SalonController::class, 'enrollByCode']);
     });
 
-    // JUEGOS DIDÁCTICOS (Quizizz/Kahoot) + comprobante de puntaje
+    // JUEGOS DIDÁCTICOS: catálogo, entregas y calificación; límite de 60 solicitudes por minuto.
     Route::prefix('games')->middleware(['throttle:60,1'])->group(function () {
         Route::get('/', [GameController::class, 'index']);
         Route::post('/', [GameController::class, 'store']);
@@ -513,11 +516,12 @@ Route::prefix('v1')->group(function () {
 
     // ============================================================
 
+    // CONSULTA DE INVITADOS: búsqueda de estudiante y generación de captcha con límites por ruta.
     Route::post('/guest/student-lookup', [GuestStudentController::class, 'lookup'])->middleware('throttle:5,1');
     Route::get('/guest/captcha', [GuestStudentController::class, 'generateCaptcha'])->middleware('throttle:10,1');
 
     // ============================================================
-    // RUTAS PÚBLICAS (Sin autenticación)
+    // RUTAS PÚBLICAS: configuración y traducciones consultables sin autenticación, con throttle.
     // ============================================================
 
     Route::get('/config', [AdminController::class, 'publicConfig'])
@@ -527,13 +531,13 @@ Route::prefix('v1')->group(function () {
         ->middleware('throttle:60,1');
 
     // ============================================================
-    // HEALTH CHECK
+    // HEALTH CHECK: confirma disponibilidad de la API y devuelve su versión y hora actual.
     // ============================================================
 
     Route::get('/health', function () {
         return response()->json([
             'status' => 'healthy',
-            'message' => 'Mentemática API is running',
+            'message' => 'Aulamate API is running',
             'version' => 'v1',
             'timestamp' => now()
         ]);

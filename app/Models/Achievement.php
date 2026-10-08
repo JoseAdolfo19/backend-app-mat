@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
+/** Logro configurable con traducciones, criterios y recompensa de experiencia. */
 class Achievement extends Model
 {
     protected $fillable = [
@@ -26,6 +27,7 @@ class Achievement extends Model
         'xp_reward' => 'integer',
     ];
 
+    /** Usuarios que han desbloqueado el logro, con fecha de desbloqueo en la tabla pivote. */
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'user_achievements')
@@ -33,11 +35,13 @@ class Achievement extends Model
             ->withTimestamps();
     }
 
+    /** Devuelve el nombre traducido, usando español si falta la traducción solicitada. */
     public function name(string $locale = 'es'): string
     {
         return $this->{"name_{$locale}"} ?? $this->name_es;
     }
 
+    /** Devuelve la descripción traducida, usando español como respaldo. */
     public function description(string $locale = 'es'): string
     {
         return $this->{"description_{$locale}"} ?? $this->description_es;

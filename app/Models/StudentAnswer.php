@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
+/** Respuesta de un usuario a una pregunta dentro de un resultado de evaluación. */
 class StudentAnswer extends Model
 {
     use HasUuids;
@@ -28,16 +29,19 @@ class StudentAnswer extends Model
     ];
 
     // ========== RELACIONES ==========
+    /** Usuario que envió la respuesta. */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
+    /** Resultado de evaluación que contiene la respuesta. */
     public function evaluationResult()
     {
         return $this->belongsTo(EvaluationResult::class);
     }
 
+    /** Pregunta respondida. */
     public function question()
     {
         return $this->belongsTo(Question::class);

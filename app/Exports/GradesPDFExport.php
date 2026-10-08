@@ -7,17 +7,20 @@ use App\Models\Evaluation;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
+/** Consulta resultados de evaluaciones y calcula métricas para informes docentes. */
 class GradesPDFExport
 {
     protected $teacherId;
     protected $filters;
 
+    /** Configura el informe con un docente opcional y filtros de consulta. */
     public function __construct($teacherId = null, $filters = [])
     {
         $this->teacherId = $teacherId;
         $this->filters = $filters;
     }
 
+    /** Obtiene resultados con sus datos de estudiante, evaluación y lección. */
     public function getData()
     {
         $query = DB::table('evaluation_results')
@@ -56,6 +59,7 @@ class GradesPDFExport
         return $query->orderBy('evaluation_results.created_at', 'desc')->get();
     }
 
+    /** Resume puntajes por área y tipo, e identifica a los cinco estudiantes con mayor promedio. */
     public function getSummary()
     {
         $data = $this->getData();
@@ -91,6 +95,7 @@ class GradesPDFExport
         return $summary;
     }
 
+    /** Convierte el puntaje a la escala AD/A/B/C usada en los informes. */
     public static function gradeLetter($score): string
     {
         $score = (float) $score;

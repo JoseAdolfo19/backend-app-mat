@@ -9,15 +9,21 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
+/**
+ * Crea interactivamente una cuenta administrativa y la asocia al rol admin.
+ */
 class CreateAdminUser extends Command
 {
-    protected $signature = 'mentematica:create-admin
+    protected $signature = 'aulamate:create-admin
         {--email= : Email del administrador}
         {--name= : Nombre completo}
         {--password= : Contraseña (si no se provee, se genera una aleatoria)}';
 
-    protected $description = 'Crear un usuario administrador para Mentemática';
+    protected $description = 'Crear un usuario administrador para Aulamate';
 
+    /**
+     * Valida los datos proporcionados, crea el usuario y muestra sus datos básicos.
+     */
     public function handle(): int
     {
         $email = $this->option('email') ?? $this->ask('Email del administrador');

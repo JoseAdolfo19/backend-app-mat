@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
+/** Registro de una actividad del usuario y de su entidad asociada, si existe. */
 class ActivityLog extends Model
 {
     use HasUuids;
@@ -26,6 +27,7 @@ class ActivityLog extends Model
         'metadata' => 'array',
     ];
 
+    /** Usuario que originó la actividad. */
     public function user()
     {
         return $this->belongsTo(User::class);

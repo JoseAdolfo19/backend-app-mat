@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
+/**
+ * Gestiona entregas asociadas a lecciones, evaluaciones y exámenes, incluida su revisión docente.
+ */
 class SubmittedWorkController extends Controller
 {
     /**

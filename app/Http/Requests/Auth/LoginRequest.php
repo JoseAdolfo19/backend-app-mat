@@ -4,13 +4,18 @@ namespace App\Http\Requests\Auth;
 
 use Illuminate\Foundation\Http\FormRequest;
 
+/**
+ * Valida los campos de correo y contraseña para iniciar sesión con credenciales.
+ */
 class LoginRequest extends FormRequest
 {
+    /** Autoriza la solicitud para que se apliquen sus reglas de validación. */
     public function authorize(): bool
     {
         return true;
     }
 
+    /** Define las reglas de validación para el correo y la contraseña requeridos. */
     public function rules(): array
     {
         return [
@@ -19,6 +24,7 @@ class LoginRequest extends FormRequest
         ];
     }
 
+    /** Devuelve los mensajes traducidos para errores de validación del inicio de sesión. */
     public function messages(): array
     {
         return [

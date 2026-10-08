@@ -7,8 +7,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Aplica el límite global configurado de solicitudes por usuario o dirección IP.
+ */
 class GlobalRateLimit
 {
+    /** Aplica el límite global y agrega encabezados de uso a la respuesta. */
     public function handle(Request $request, Closure $next): Response
     {
         // 60 req/min resultaba insuficiente: la app emite entre 3 y 6 llamadas

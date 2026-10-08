@@ -8,6 +8,7 @@ use App\Models\Evaluation;
 use App\Policies\LessonPolicy;
 use App\Policies\EvaluationPolicy;
 
+/** Registra las políticas de autorización de lecciones y evaluaciones. */
 class AuthServiceProvider extends ServiceProvider
 {
     protected $policies = [
@@ -15,6 +16,7 @@ class AuthServiceProvider extends ServiceProvider
         Evaluation::class => EvaluationPolicy::class,
     ];
 
+    /** Registra en Laravel las políticas declaradas por el proveedor. */
     public function boot(): void
     {
         $this->registerPolicies();

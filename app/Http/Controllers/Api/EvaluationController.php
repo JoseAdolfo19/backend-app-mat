@@ -16,6 +16,9 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use App\Services\ActivityService;
 
+/**
+ * Gestiona evaluaciones, preguntas, entregas, resultados y estadísticas de rendimiento.
+ */
 class EvaluationController extends Controller
 {
     /**

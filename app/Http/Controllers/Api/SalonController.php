@@ -16,6 +16,9 @@ use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Imports\SalonStudentsImport;
 
+/**
+ * Manages salons, courses, lessons, enrollments and their student rosters.
+ */
 class SalonController extends Controller
 {
     private function isStaff(): bool
@@ -34,6 +37,7 @@ class SalonController extends Controller
     // SALONES — CRUD (coordinador/director)
     // ============================================================
 
+    /** Lists salons visible to the current user, or the student's enrolled courses. */
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -57,6 +61,7 @@ class SalonController extends Controller
         return response()->json(['data' => $salones]);
     }
 
+    /** Creates a salon for a coordinator or director. */
     public function store(Request $request)
     {
         if (!$this->isCoordinatorOrDirector()) {
@@ -76,6 +81,7 @@ class SalonController extends Controller
         return response()->json(['message' => 'Salón creado', 'data' => $salon], 201);
     }
 
+    /** Returns a salon with its courses, teachers, lessons and academic period. */
     public function show($id)
     {
         if (!$this->isStaff()) {
@@ -88,6 +94,7 @@ class SalonController extends Controller
         return response()->json(['data' => $salon]);
     }
 
+    /** Updates a salon's grade, section and academic period. */
     public function update(Request $request, $id)
     {
         if (!$this->isCoordinatorOrDirector()) {
@@ -106,6 +113,7 @@ class SalonController extends Controller
         return response()->json(['message' => 'Salón actualizado', 'data' => $salon]);
     }
 
+    /** Deletes a salon. */
     public function destroy($id)
     {
         if (!$this->isCoordinatorOrDirector()) {
@@ -122,6 +130,7 @@ class SalonController extends Controller
     // CURSOS — CRUD por salón
     // ============================================================
 
+    /** Lists courses in a salon with enrollment counts. */
     public function courses($salonId)
     {
         $user = Auth::user();
@@ -145,6 +154,7 @@ class SalonController extends Controller
         return response()->json(['data' => $courses]);
     }
 
+    /** Creates a course in a salon and enrolls its existing students. */
     public function storeCourse(Request $request, $salonId)
     {
         if (!$this->isCoordinatorOrDirector()) {
@@ -173,6 +183,7 @@ class SalonController extends Controller
         return response()->json(['message' => 'Curso creado', 'data' => $course->load('teacher:id,full_name')], 201);
     }
 
+    /** Updates the name, description or teacher assigned to a course. */
     public function updateCourse(Request $request, $courseId)
     {
         if (!$this->isCoordinatorOrDirector()) {
@@ -191,6 +202,7 @@ class SalonController extends Controller
         return response()->json(['message' => 'Curso actualizado', 'data' => $course]);
     }
 
+    /** Deletes a course. */
     public function destroyCourse($courseId)
     {
         if (!$this->isCoordinatorOrDirector()) {
@@ -207,6 +219,7 @@ class SalonController extends Controller
     // LECCIONES — por curso (docente del curso o coordinador/director)
     // ============================================================
 
+    /** Lists a course's lessons after checking the user's course access. */
     public function courseLessons($courseId)
     {
         $course = Course::with('salon:id,grade,section')->findOrFail($courseId);
@@ -220,6 +233,7 @@ class SalonController extends Controller
         ]);
     }
 
+    /** Creates a lesson in a course for its teacher or an authorized coordinator. */
     public function storeLesson(Request $request, $courseId)
     {
         $course = Course::findOrFail($courseId);
@@ -263,6 +277,7 @@ class SalonController extends Controller
     // MATRÍCULA — estudiantes a cursos (coordinador/director/docente)
     // ============================================================
 
+    /** Enrolls validated students in a course and, where applicable, its salon courses. */
     public function enroll(Request $request, $courseId)
     {
         if (!$this->isStaff()) {
@@ -305,6 +320,7 @@ class SalonController extends Controller
         return response()->json(['message' => "$added estudiante(s) matriculado(s)", 'added' => $added]);
     }
 
+    /** Removes a student from a course. */
     public function unenroll(Request $request, $courseId)
     {
         if (!$this->isStaff()) {
@@ -330,6 +346,7 @@ class SalonController extends Controller
         return response()->json(['message' => 'Estudiante retirado del curso']);
     }
 
+    /** Lists students enrolled in a course after checking access. */
     public function courseStudents($courseId)
     {
         $course = Course::findOrFail($courseId);
@@ -344,6 +361,7 @@ class SalonController extends Controller
     // ALUMNOS DEL SALÓN — registro y listado
     // ============================================================
 
+    /** Lists salon students, optionally filtered by name, email or DNI. */
     public function salonStudents(Request $request, $salonId)
     {
         if (!$this->isCoordinatorOrDirector()) {
@@ -368,6 +386,7 @@ class SalonController extends Controller
         return response()->json(['data' => $students]);
     }
 
+    /** Creates a student in a salon and enrolls them in its courses. */
     public function storeStudent(Request $request, $salonId)
     {
         if (!$this->isCoordinatorOrDirector()) {
@@ -408,6 +427,7 @@ class SalonController extends Controller
         ], 201);
     }
 
+    /** Imports salon students from a CSV or spreadsheet and returns row errors. */
     public function importStudents(Request $request, $salonId)
     {
         if (!$this->isCoordinatorOrDirector()) {
@@ -435,6 +455,7 @@ class SalonController extends Controller
         ]);
     }
 
+    /** Enrolls the authenticated student in a course using its enrollment code. */
     public function enrollByCode(Request $request)
     {
         $user = Auth::user();
@@ -498,6 +519,7 @@ class SalonController extends Controller
     // ESTUDIANTE — sus cursos matriculados
     // ============================================================
 
+    /** Lists courses in which the authenticated student is enrolled. */
     public function studentCourses(Request $request)
     {
         $user = Auth::user();
@@ -513,6 +535,7 @@ class SalonController extends Controller
     // CATÁLOGOS (coordinador/director): docentes y estudiantes
     // ============================================================
 
+    /** Lists active teacher accounts for salon/course administration. */
     public function teachers()
     {
         if (!$this->isCoordinatorOrDirector()) {
@@ -529,6 +552,7 @@ class SalonController extends Controller
         return response()->json(['data' => $users]);
     }
 
+    /** Lists active student accounts for salon/course administration. */
     public function students()
     {
         if (!$this->isCoordinatorOrDirector()) {
@@ -545,6 +569,7 @@ class SalonController extends Controller
         return response()->json(['data' => $users]);
     }
 
+    /** Returns an authorized course and its published lessons for a student view. */
     public function studentCourseDetail($courseId)
     {
         $user = Auth::user();

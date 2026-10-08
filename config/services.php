@@ -49,7 +49,7 @@ return [
     'webpush' => [
         'vapid_public_key' => env('VAPID_PUBLIC_KEY'),
         'vapid_private_key' => env('VAPID_PRIVATE_KEY'),
-        'subject_email' => env('VAPID_SUBJECT_EMAIL', 'admin@mentematica.com'),
+        'subject_email' => env('VAPID_SUBJECT_EMAIL', 'admin@aulamate.com'),
     ],
 
     'groq' => [

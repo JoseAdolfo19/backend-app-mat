@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Log;
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
 
+/** Envía notificaciones web push a las suscripciones activas de los usuarios. */
 class WebPushService
 {
     /**
@@ -50,7 +51,7 @@ class WebPushService
                         'TTL' => 86400,
                         'urgency' => 'normal',
                         'VAPID' => [
-                            'subject' => 'mailto:' . (config('services.webpush.subject_email') ?? 'admin@mentematica.com'),
+                            'subject' => 'mailto:' . (config('services.webpush.subject_email') ?? 'admin@aulamate.com'),
                             'publicKey' => $this->publicKey(),
                             'privateKey' => $this->privateKey(),
                         ],
@@ -80,7 +81,7 @@ class WebPushService
     {
         $auth = [
             'VAPID' => [
-                'subject' => 'mailto:' . (config('services.webpush.subject_email') ?? 'admin@mentematica.com'),
+                'subject' => 'mailto:' . (config('services.webpush.subject_email') ?? 'admin@aulamate.com'),
                 'publicKey' => $this->publicKey(),
                 'privateKey' => $this->privateKey(),
             ],
@@ -89,16 +90,19 @@ class WebPushService
         return new WebPush($auth);
     }
 
+    /** Clave pública VAPID configurada para el envío web push. */
     public function publicKey(): string
     {
         return config('services.webpush.vapid_public_key', '');
     }
 
+    /** Clave privada VAPID configurada para el envío web push. */
     public function privateKey(): string
     {
         return config('services.webpush.vapid_private_key', '');
     }
 
+    /** Indica si están configuradas ambas claves VAPID. */
     public function isConfigured(): bool
     {
         return !empty($this->publicKey()) && !empty($this->privateKey());

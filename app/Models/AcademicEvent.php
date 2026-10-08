@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 
+/** Evento académico asociado a un usuario y, opcionalmente, a un curso. */
 class AcademicEvent extends Model
 {
     protected $fillable = [
@@ -31,11 +32,13 @@ class AcademicEvent extends Model
         'is_public' => 'boolean',
     ];
 
+    /** Usuario propietario del evento. */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
+    /** Filtra los eventos del usuario y los marcados como públicos. */
     public function scopeForUser(Builder $query, string $userId): Builder
     {
         return $query->where(function (Builder $q) use ($userId) {
@@ -43,6 +46,7 @@ class AcademicEvent extends Model
         });
     }
 
+    /** Selecciona eventos cuyo inicio está dentro del rango indicado. */
     public function scopeInRange(Builder $query, $start, $end): Builder
     {
         return $query->whereBetween('start_date', [$start, $end]);

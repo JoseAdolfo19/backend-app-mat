@@ -17,10 +17,14 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
+/**
+ * Gestiona usuarios, configuración institucional, períodos académicos y copias de seguridad.
+ */
 class AdminController extends Controller
 {
     // ========== GESTIÓN DE USUARIOS ==========
     
+    /** Devuelve usuarios paginados, opcionalmente filtrados por rol o búsqueda. */
     public function getUsers(Request $request)
     {
         $query = User::with('role');
@@ -46,6 +50,7 @@ class AdminController extends Controller
         return response()->json($users);
     }
 
+    /** Devuelve un usuario con su rol y perfiles asociados. */
     public function getUser($id)
     {
         $user = User::with(['role', 'studentProfile', 'teacherProfile'])
@@ -54,6 +59,7 @@ class AdminController extends Controller
         return response()->json($user);
     }
 
+    /** Crea un usuario y el perfil asociado a su rol; devuelve el usuario creado. */
     public function createUser(Request $request)
     {
         $validated = $request->validate([
@@ -102,6 +108,7 @@ class AdminController extends Controller
         ], 201);
     }
 
+    /** Actualiza los campos editables de una cuenta y devuelve el usuario actualizado. */
     public function updateUser(Request $request, $id)
     {
         $user = User::findOrFail($id);
@@ -133,6 +140,7 @@ class AdminController extends Controller
         ]);
     }
 
+    /** Elimina un usuario salvo que lo impidan las protecciones de cuentas administradoras. */
     public function deleteUser($id)
     {
         $user = User::findOrFail($id);
@@ -166,6 +174,7 @@ class AdminController extends Controller
         ]);
     }
 
+    /** Activa la cuenta indicada. */
     public function activateUser($id)
     {
         $user = User::findOrFail($id);
@@ -176,6 +185,7 @@ class AdminController extends Controller
         ]);
     }
 
+    /** Desactiva la cuenta indicada y revoca sus tokens de acceso. */
     public function deactivateUser($id)
     {
         $user = User::findOrFail($id);
@@ -218,13 +228,14 @@ class AdminController extends Controller
 
     // ========== CONFIGURACIÓN DEL SISTEMA ==========
     
+    /** Devuelve la configuración institucional guardada o los valores de marca predeterminados. */
     public function getConfig()
     {
         $config = InstitutionConfig::first();
 
         if (!$config) {
             return response()->json([
-                'institution_name' => 'Mentemática',
+                'institution_name' => 'Aulamate',
                 'primary_color' => '#004AC6',
                 'secondary_color' => '#006C49',
             ]);
@@ -242,7 +253,7 @@ class AdminController extends Controller
         $config = InstitutionConfig::first();
 
         return response()->json([
-            'institution_name' => $config?->institution_name ?? 'Mentemática',
+            'institution_name' => $config?->institution_name ?? 'Aulamate',
             'primary_color' => $config?->primary_color ?? '#004AC6',
             'secondary_color' => $config?->secondary_color ?? '#006C49',
             'tertiary_color' => $config?->tertiary_color ?? null,
@@ -252,11 +263,12 @@ class AdminController extends Controller
         ]);
     }
 
+    /** Valida y guarda la marca institucional y la configuración del sistema. */
     public function updateConfig(Request $request)
     {
         $config = InstitutionConfig::first() ?? InstitutionConfig::create([
             'id' => Str::uuid(),
-            'institution_name' => 'Mentemática'
+            'institution_name' => 'Aulamate'
         ]);
 
         $validated = $request->validate([
@@ -281,12 +293,14 @@ class AdminController extends Controller
 
     // ========== PERÍODOS ACADÉMICOS ==========
     
+    /** Devuelve los períodos académicos ordenados por fecha de inicio descendente. */
     public function getPeriods()
     {
         $periods = AcademicPeriod::orderBy('start_date', 'desc')->get();
         return response()->json($periods);
     }
 
+    /** Crea un período académico y, si se solicita, lo establece como el único activo. */
     public function createPeriod(Request $request)
     {
         $validated = $request->validate([
@@ -316,6 +330,7 @@ class AdminController extends Controller
         ], 201);
     }
 
+    /** Actualiza un período y desactiva los demás si se marca como activo. */
     public function updatePeriod(Request $request, $id)
     {
         $period = AcademicPeriod::findOrFail($id);
@@ -343,6 +358,7 @@ class AdminController extends Controller
         ]);
     }
 
+    /** Elimina el período académico indicado. */
     public function deletePeriod($id)
     {
         $period = AcademicPeriod::findOrFail($id);
@@ -355,6 +371,7 @@ class AdminController extends Controller
 
     // ========== DASHBOARD ADMIN ==========
     
+    /** Devuelve estadísticas del panel administrativo y los diez usuarios más recientes. */
     public function dashboard()
     {
         $studentRoleId = Role::where('name', Role::STUDENT)->first()?->id;
@@ -383,6 +400,7 @@ class AdminController extends Controller
 
     // ========== IMPORTAR / EXPORTAR USUARIOS ==========
 
+    /** Importa usuarios desde CSV y devuelve el total importado y los errores por fila. */
     public function importUsers(Request $request)
     {
         $request->validate([
@@ -453,6 +471,7 @@ class AdminController extends Controller
         ]);
     }
 
+    /** Transmite un CSV con los usuarios, opcionalmente filtrados por rol. */
     public function exportUsers(Request $request)
     {
         $query = User::with('role');
@@ -494,6 +513,7 @@ class AdminController extends Controller
 
     // ========== COPIAS DE SEGURIDAD ==========
 
+    /** Crea un respaldo de la base de datos y devuelve nombre, tamaño y fecha. */
     public function createBackup()
     {
         $dbConfig = config('database.connections.mysql');
@@ -558,6 +578,7 @@ class AdminController extends Controller
         ]);
     }
 
+    /** Devuelve los datos del respaldo más reciente o indica que no hay respaldos. */
     public function getLastBackup()
     {
         $backupPath = storage_path('app/backups');
@@ -593,6 +614,7 @@ class AdminController extends Controller
         ]);
     }
 
+    /** Descarga un respaldo de base de datos tras validar el nombre de archivo. */
     public function downloadBackup($filename)
     {
         $safeFilename = basename($filename);

@@ -8,10 +8,13 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use RuntimeException;
 
+/**
+ * Transmite respuestas de chat de IA y genera contenido estructurado para lecciones.
+ */
 class AiController extends Controller
 {
     private const SYSTEM_PROMPT = <<<'EOT'
-Eres el **Profesor Euler**, el asistente pedagogico de Mentemática. Eres un mentor paciente, amigable y experto **exclusivamente** en matematicas. Tu mision es guiar al estudiante para que **el mismo** resuelva los problemas, sin hacerle la tarea.
+Eres el **Profesor Euler**, el asistente pedagógico de Aulamate. Eres un mentor paciente, amigable y experto **exclusivamente** en matemáticas. Tu misión es guiar al estudiante para que **él mismo** resuelva los problemas, sin hacerle la tarea.
 
 ## RESTRICCION ABSOLUTA - Solo matematicas:
 1. Solo puedes responder preguntas **exclusivamente** sobre matematicas.
@@ -56,6 +59,7 @@ EOT;
 
     private const DAILY_LIMIT = 50;
 
+    /** Transmite la respuesta del asistente de IA como eventos enviados por el servidor. */
     public function chat(Request $request): Response
     {
         $request->validate([

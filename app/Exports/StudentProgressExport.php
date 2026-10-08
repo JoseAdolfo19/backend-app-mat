@@ -8,15 +8,18 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
+/** Genera una hoja con las evaluaciones y el progreso de lecciones de un estudiante. */
 class StudentProgressExport implements FromCollection, WithHeadings, WithMapping, WithStyles
 {
     private array $studentData;
 
+    /** Recibe los conjuntos de evaluaciones y lecciones del estudiante. */
     public function __construct(array $studentData)
     {
         $this->studentData = $studentData;
     }
 
+    /** Combina evaluaciones y lecciones en filas uniformes para exportar. */
     public function collection(): \Illuminate\Support\Collection
     {
         $rows = collect();
@@ -46,11 +49,13 @@ class StudentProgressExport implements FromCollection, WithHeadings, WithMapping
         return $rows;
     }
 
+    /** Devuelve los encabezados de las columnas exportadas. */
     public function headings(): array
     {
         return ['Tipo', 'Nombre', 'Puntaje / Progreso', 'Estado / Correctas', 'Total', 'Fecha'];
     }
 
+    /** Presenta cada fila uniforme con etiquetas y valores legibles. */
     public function map($row): array
     {
         return [
@@ -63,6 +68,7 @@ class StudentProgressExport implements FromCollection, WithHeadings, WithMapping
         ];
     }
 
+    /** Aplica formato de negrita a la fila de encabezados. */
     public function styles(Worksheet $sheet): array
     {
         return [

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
+/** Token de un dispositivo registrado para recibir notificaciones FCM. */
 class DeviceToken extends Model
 {
     use HasUuids;
@@ -36,21 +37,25 @@ class DeviceToken extends Model
     const PLATFORM_IOS = 'ios';
     const PLATFORM_WEB = 'web';
 
+    /** Usuario propietario del dispositivo. */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
+    /** Filtra los tokens activos. */
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
     }
 
+    /** Filtra los tokens de un usuario. */
     public function scopeForUser($query, $userId)
     {
         return $query->where('user_id', $userId);
     }
 
+    /** Filtra los tokens por plataforma. */
     public function scopeByPlatform($query, $platform)
     {
         return $query->where('platform', $platform);

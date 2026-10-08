@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
+/** Pregunta de una evaluación con las respuestas enviadas por estudiantes. */
 class Question extends Model
 {
     use HasUuids, SoftDeletes;
@@ -38,11 +39,13 @@ class Question extends Model
     const TYPE_FORMULA = 'formula';
 
     // ========== RELACIONES ==========
+    /** Evaluación a la que pertenece la pregunta. */
     public function evaluation()
     {
         return $this->belongsTo(Evaluation::class);
     }
 
+    /** Respuestas enviadas por estudiantes a esta pregunta. */
     public function studentAnswers()
     {
         return $this->hasMany(StudentAnswer::class);

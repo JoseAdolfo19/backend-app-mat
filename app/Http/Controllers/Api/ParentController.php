@@ -12,8 +12,13 @@ use App\Models\EvaluationResult;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * Devuelve al padre el progreso y los informes académicos de sus hijos vinculados.
+ */
 class ParentController extends Controller
 {
+    /** Lista los hijos vinculados al padre autenticado y sus perfiles estudiantiles. */
+    /** Lists the authenticated parent's linked children and their student profiles. */
     public function index()
     {
         $user = Auth::user();
@@ -24,6 +29,8 @@ class ParentController extends Controller
         ]);
     }
 
+    /** Devuelve el progreso, actividad y resumen de evaluaciones de un hijo vinculado. */
+    /** Returns a linked child's current progress, activity and evaluation summary. */
     public function childProgress($studentId)
     {
         $user = Auth::user();
@@ -76,6 +83,8 @@ class ParentController extends Controller
         ]);
     }
 
+    /** Devuelve un informe detallado de evaluaciones y lecciones de un hijo vinculado. */
+    /** Returns a linked child's detailed evaluation and lesson performance report. */
     public function childReport($studentId)
     {
         $user = Auth::user();

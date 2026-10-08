@@ -10,6 +10,9 @@ use App\Models\EvaluationResult;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * Gestiona conversaciones y mensajes entre docentes y estudiantes con relación académica.
+ */
 class MessageController extends Controller
 {
     /**

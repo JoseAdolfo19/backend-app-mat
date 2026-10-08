@@ -10,6 +10,9 @@ use App\Models\EvaluationResult;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * Gestiona hilos de debate y comentarios visibles según el rol y las relaciones académicas.
+ */
 class ForumController extends Controller
 {
     /**

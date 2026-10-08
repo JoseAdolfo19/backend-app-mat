@@ -12,8 +12,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Gestiona exámenes e intentos de estudiantes, incluidas calificaciones e incidencias.
+ */
 class ExamController extends Controller
 {
+    /** Lista los exámenes visibles para el rol actual e incluye el intento propio del estudiante. */
     public function index(Request $request)
     {
         $query = Exam::with(['teacher']);
@@ -70,6 +74,7 @@ class ExamController extends Controller
         ]);
     }
 
+    /** Crea un examen en borrador con sus preguntas y devuelve el examen creado. */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -148,6 +153,7 @@ class ExamController extends Controller
         }
     }
 
+    /** Devuelve el examen y sus preguntas, ocultando las respuestas a estudiantes y padres. */
     public function show($id)
     {
         $exam = Exam::with(['teacher', 'questions'])->findOrFail($id);
@@ -178,6 +184,7 @@ class ExamController extends Controller
         ]);
     }
 
+    /** Actualiza un examen y, si se envían preguntas, reemplaza el conjunto completo. */
     public function update(Request $request, $id)
     {
         $exam = Exam::findOrFail($id);
@@ -260,6 +267,7 @@ class ExamController extends Controller
         }
     }
 
+    /** Elimina un examen que no tenga intentos registrados. */
     public function destroy($id)
     {
         $exam = Exam::findOrFail($id);
@@ -286,6 +294,7 @@ class ExamController extends Controller
         ]);
     }
 
+    /** Publica y activa un examen después de comprobar que tenga preguntas. */
     public function activate($id)
     {
         $exam = Exam::findOrFail($id);
@@ -317,6 +326,7 @@ class ExamController extends Controller
         ]);
     }
 
+    /** Desactiva el examen indicado. */
     public function deactivate($id)
     {
         $exam = Exam::findOrFail($id);
@@ -339,6 +349,7 @@ class ExamController extends Controller
         ]);
     }
 
+    /** Inicia o retoma el intento del estudiante y devuelve sus preguntas. */
     public function startAttempt($id)
     {
         $exam = Exam::findOrFail($id);
@@ -430,6 +441,7 @@ class ExamController extends Controller
         ], 201);
     }
 
+    /** Califica y registra las respuestas del estudiante para un intento en curso. */
     public function submitAttempt(Request $request, $attemptId)
     {
         $attempt = ExamAttempt::findOrFail($attemptId);
@@ -548,6 +560,7 @@ class ExamController extends Controller
         }
     }
 
+    /** Registra una incidencia de integridad y actualiza el estado del intento si corresponde. */
     public function reportCheating(Request $request, $attemptId)
     {
         $attempt = ExamAttempt::findOrFail($attemptId);
@@ -604,6 +617,7 @@ class ExamController extends Controller
         ]);
     }
 
+    /** Devuelve totales de intentos, distribución de notas, aprobación e incidencias. */
     public function getExamStats($id)
     {
         $exam = Exam::findOrFail($id);

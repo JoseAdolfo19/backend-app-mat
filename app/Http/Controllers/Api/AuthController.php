@@ -17,6 +17,9 @@ use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Laravel\Socialite\Facades\Socialite;
 
+/**
+ * Gestiona la autenticación, los perfiles, los tokens y la verificación de correo.
+ */
 class AuthController extends Controller
 {
     /**
@@ -377,7 +380,7 @@ class AuthController extends Controller
         try {
             Mail::raw("Tu código de verificación es: {$code}\n\nEste código expira en 10 minutos.", function ($message) use ($user) {
                 $message->to($user->email)
-                    ->subject('Verifica tu correo - Mentemática');
+                    ->subject('Verifica tu correo - Aulamate');
             });
         } catch (\Exception $e) {
             report($e);

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 
+/** Suscripción de navegador para enviar notificaciones web push a un usuario. */
 class PushSubscription extends Model
 {
     protected $fillable = [
@@ -22,16 +23,19 @@ class PushSubscription extends Model
         'is_active' => 'boolean',
     ];
 
+    /** Usuario propietario de la suscripción. */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
+    /** Filtra las suscripciones web push activas. */
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }
 
+    /** Filtra las suscripciones de un usuario. */
     public function scopeForUser(Builder $query, string $userId): Builder
     {
         return $query->where('user_id', $userId);

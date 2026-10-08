@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\UserAchievement;
 use Illuminate\Support\Facades\Auth;
 
+/** Gestiona las recompensas de experiencia, los logros y el resumen de gamificación. */
 class GamificationService
 {
     public const XP_LESSON_COMPLETED = 25;
@@ -18,9 +19,7 @@ class GamificationService
     public const XP_STREAK_BONUS = 10;
     public const XP_DAILY_LOGIN = 5;
 
-    /**
-     * Definición canónica de logros (slug => criterios).
-     */
+    /** Devuelve las definiciones canónicas de logros y sus criterios. */
     public static function definitions(): array
     {
         return [
@@ -131,9 +130,7 @@ class GamificationService
         ];
     }
 
-    /**
-     * Sincroniza la definición de logros con la BD (seed idempotente).
-     */
+    /** Sincroniza de forma idempotente las definiciones con la tabla de logros. */
     public static function syncDefinitions(): void
     {
         foreach (self::definitions() as $def) {
@@ -142,7 +139,9 @@ class GamificationService
     }
 
     /**
-     * Otorgar XP a un estudiante y devolver resultado.
+     * Añade experiencia al perfil del estudiante y registra el motivo si se indica.
+     *
+     * @return array{leveled_up: bool, new_level: int|null, total_xp: int, xp: int}
      */
     public function awardXp(User $user, int $amount, string $reason = ''): array
     {
@@ -177,8 +176,9 @@ class GamificationService
     }
 
     /**
-     * Comprobar todos los logros y otorgar los desbloqueados.
-     * Devuelve los logros recién desbloqueados.
+     * Comprueba los criterios del usuario, desbloquea logros cumplidos y otorga sus recompensas.
+     *
+     * @return Achievement[] Logros desbloqueados durante esta comprobación.
      */
     public function checkAchievements(User $user): array
     {
@@ -244,9 +244,7 @@ class GamificationService
         return $newly;
     }
 
-    /**
-     * Resumen de gamificación para un estudiante.
-     */
+    /** Prepara el estado de gamificación y los logros traducidos del usuario. */
     public function gamificationSummary(User $user, string $locale = 'es'): array
     {
         $profile = $user->studentProfile;

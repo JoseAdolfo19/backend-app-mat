@@ -6,8 +6,12 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
 
+/**
+ * Envía enlaces de restablecimiento de contraseña y aplica tokens válidos.
+ */
 class PasswordResetController extends Controller
 {
+    /** Envía un enlace de restablecimiento al correo registrado indicado. */
     public function sendResetLink(Request $request)
     {
         $request->validate([
@@ -29,6 +33,7 @@ class PasswordResetController extends Controller
         ], 400);
     }
 
+    /** Cambia la contraseña mediante el correo, token y nueva contraseña proporcionados. */
     public function resetPassword(Request $request)
     {
         $request->validate([

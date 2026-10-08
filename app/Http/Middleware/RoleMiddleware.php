@@ -7,8 +7,12 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Restringe rutas a los roles solicitados y respeta la jerarquía docente-coordinador-director.
+ */
 class RoleMiddleware
 {
+    /** Comprueba la autenticación y el rol antes de continuar la solicitud. */
     public function handle(Request $request, Closure $next, ...$roles): Response
     {
         $user = $request->user();

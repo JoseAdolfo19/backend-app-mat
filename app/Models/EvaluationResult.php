@@ -25,7 +25,8 @@ class EvaluationResult extends Model
         'status',
         'started_at',
         'completed_at',
-        'attempt_number'
+        'attempt_number',
+        'tab_switch_count'
     ];
 
     protected $casts = [
@@ -35,6 +36,7 @@ class EvaluationResult extends Model
         'total_questions' => 'integer',
         'time_taken' => 'integer',
         'attempt_number' => 'integer',
+        'tab_switch_count' => 'integer',
         'started_at' => 'datetime',
         'completed_at' => 'datetime'
     ];

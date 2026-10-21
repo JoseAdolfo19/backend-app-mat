@@ -24,11 +24,13 @@ class InstitutionConfig extends Model
         'logo',
         'email_notifications',
         'backup_frequency',
-        'last_backup'
+        'last_backup',
+        'allow_tab_switches'
     ];
 
     protected $casts = [
         'email_notifications' => 'array',
-        'last_backup' => 'datetime'
+        'last_backup' => 'datetime',
+        'allow_tab_switches' => 'boolean'
     ];
 }

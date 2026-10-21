@@ -9,10 +9,10 @@ use App\Http\Controllers\Api\EvaluationController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\StudentManagerController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\DeviceController;
 use App\Http\Controllers\Api\AiController;
-use App\Http\Controllers\Api\ParentController;
 use App\Http\Controllers\Api\GuestStudentController;
 use App\Http\Controllers\Api\ExamController;
 use App\Http\Controllers\Api\SubmittedWorkController;
@@ -25,6 +25,9 @@ use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ForumController;
 use App\Http\Controllers\Api\SalonController;
 use App\Http\Controllers\Api\GameController;
+use App\Http\Controllers\Api\AnnouncementController;
+use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\InstitutionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -78,7 +81,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/ai/chat', [AiController::class, 'chat'])
             ->middleware('throttle:20,1');
         Route::post('/ai/generate-lesson', [AiController::class, 'generateLesson'])
-            ->middleware(['role:teacher,admin', 'throttle:10,1']);
+            ->middleware(['role:teacher', 'throttle:10,1']);
 
         // ============================================================
         // PERFIL DE USUARIO: operaciones de cuenta disponibles a cualquier usuario autenticado.
@@ -89,6 +92,8 @@ Route::prefix('v1')->group(function () {
                 ->middleware('cache.api');
             Route::put('/profile', [AuthController::class, 'updateProfile']);
             Route::put('/change-password', [AuthController::class, 'changePassword']);
+            Route::patch('/student-profile', [ProgressController::class, 'updateMyStudentProfile'])
+                ->middleware('role:student');
             Route::post('/send-verification-email', [AuthController::class, 'sendVerificationEmail'])
                 ->middleware('throttle:3,1');
             Route::post('/verify-email', [AuthController::class, 'verifyEmail'])
@@ -144,6 +149,9 @@ Route::prefix('v1')->group(function () {
                 ->middleware(['role:teacher', 'cache.api']);
             Route::get('/admin', [AdminController::class, 'dashboard'])
                 ->middleware(['role:admin', 'cache.api']);
+            // Dashboard institucional (director y coordinador)
+            Route::get('/institution', [InstitutionController::class, 'dashboard'])
+                ->middleware(['role:coordinador', 'cache.api']);
         });
         
         // ============================================================
@@ -157,6 +165,11 @@ Route::prefix('v1')->group(function () {
                 ->middleware('cache.api');
             Route::get('/level', [ProgressController::class, 'studentLevel'])
                 ->middleware('cache.api');
+            // Reporte propio exportable (estudiante)
+            Route::get('/my-report/pdf', [ProgressController::class, 'exportMyReportPdf'])
+                ->middleware(['role:student', 'throttle:5,1']);
+            Route::get('/my-report/excel', [ProgressController::class, 'exportMyReportExcel'])
+                ->middleware(['role:student', 'throttle:5,1']);
         });
         
         // ============================================================
@@ -212,12 +225,20 @@ Route::prefix('v1')->group(function () {
                 ->middleware('cache.api');
             Route::get('/{evaluationId}/questions', [EvaluationController::class, 'getQuestions'])
                 ->middleware('cache.api');
+            Route::post('/{evaluationId}/start', [EvaluationController::class, 'start'])
+                ->middleware(['role:student', 'throttle:10,1']);
+            Route::post('/{evaluationId}/attempts/{attemptId}/tab-switch', [EvaluationController::class, 'reportTabSwitch'])
+                ->middleware(['role:student', 'throttle:30,1']);
             Route::post('/{evaluationId}/submit', [EvaluationController::class, 'submit'])
                 ->middleware(['role:student']);
+            Route::get('/{evaluationId}/results/{resultId}/pdf', [EvaluationController::class, 'exportStudentResultPdf'])
+                ->middleware(['role:student', 'throttle:5,1']);
+            Route::get('/{evaluationId}/results/{resultId}/excel', [EvaluationController::class, 'exportStudentResultExcel'])
+                ->middleware(['role:student', 'throttle:5,1']);
             Route::get('/{evaluationId}/results', [EvaluationController::class, 'getResults'])
                 ->middleware('cache.api');
             
-            Route::middleware(['role:teacher,admin'])->group(function () {
+            Route::middleware(['role:teacher'])->group(function () {
                 Route::get('/{evaluationId}/result/{userId}', [EvaluationController::class, 'getStudentResult'])
                     ->middleware('cache.api');
                 Route::get('/{id}/stats', [EvaluationController::class, 'getStats'])
@@ -245,18 +266,21 @@ Route::prefix('v1')->group(function () {
         Route::prefix('exams')->group(function () {
             Route::get('/', [ExamController::class, 'index'])
                 ->middleware(['cache.api', 'throttle:30,1']);
+            // Historial de intentos del estudiante (antes de /{id} para evitar colisión)
+            Route::get('/my-attempts', [ExamController::class, 'myAttempts'])
+                ->middleware(['role:student', 'cache.api']);
             Route::post('/', [ExamController::class, 'store'])
-                ->middleware(['role:teacher,admin']);
+                ->middleware(['role:teacher']);
             Route::get('/{id}', [ExamController::class, 'show'])
                 ->middleware('cache.api');
             Route::put('/{id}', [ExamController::class, 'update'])
-                ->middleware(['role:teacher,admin']);
+                ->middleware(['role:teacher']);
             Route::delete('/{id}', [ExamController::class, 'destroy'])
-                ->middleware(['role:teacher,admin']);
+                ->middleware(['role:teacher']);
             Route::post('/{id}/activate', [ExamController::class, 'activate'])
-                ->middleware(['role:teacher,admin']);
+                ->middleware(['role:teacher']);
             Route::post('/{id}/deactivate', [ExamController::class, 'deactivate'])
-                ->middleware(['role:teacher,admin']);
+                ->middleware(['role:teacher']);
             Route::post('/{id}/start', [ExamController::class, 'startAttempt'])
                 ->middleware(['role:student']);
             Route::post('/attempts/{attemptId}/submit', [ExamController::class, 'submitAttempt'])
@@ -264,7 +288,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/attempts/{attemptId}/cheat', [ExamController::class, 'reportCheating'])
                 ->middleware(['role:student']);
             Route::get('/{id}/stats', [ExamController::class, 'getExamStats'])
-                ->middleware(['role:teacher,admin', 'cache.api']);
+                ->middleware(['role:teacher', 'cache.api']);
         });
 
         // ============================================================
@@ -277,11 +301,11 @@ Route::prefix('v1')->group(function () {
         Route::get('/submitted-works/student/summary', [SubmittedWorkController::class, 'studentSummary']);
         Route::get('/submitted-works/{id}', [SubmittedWorkController::class, 'show']);
         Route::post('/submitted-works/{id}/grade', [SubmittedWorkController::class, 'grade'])
-            ->middleware('role:teacher,admin');
+            ->middleware('role:teacher');
         Route::post('/submitted-works/{id}/return', [SubmittedWorkController::class, 'returnWork'])
-            ->middleware('role:teacher,admin');
+            ->middleware('role:teacher');
         Route::post('/submitted-works/auto-generate', [SubmittedWorkController::class, 'autoGenerateFromCompleted'])
-            ->middleware(['role:teacher,admin', 'throttle:10,1']);
+            ->middleware(['role:teacher', 'throttle:10,1']);
 
         // ============================================================
         // RANKINGS: consulta de posiciones dentro del grupo autenticado.
@@ -292,10 +316,11 @@ Route::prefix('v1')->group(function () {
         Route::get('/rankings/my-position', [RankingController::class, 'myPosition']);
 
         // ============================================================
-        // REPORTES: todo el prefijo queda restringido a docentes y administradores.
+        // REPORTES: todo el prefijo queda restringido a docentes (la
+        // jerarquía del middleware incluye a coordinador y director).
         // ============================================================
-        
-        Route::prefix('reports')->middleware(['role:teacher,admin'])->group(function () {
+
+        Route::prefix('reports')->middleware(['role:teacher'])->group(function () {
             Route::get('/performance', [ReportController::class, 'performanceReport'])
                 ->middleware('cache.api');
             Route::get('/filtered-performance', [ReportController::class, 'filteredPerformanceReport'])
@@ -333,13 +358,12 @@ Route::prefix('v1')->group(function () {
         });
         
         // ============================================================
-        // FAMILIAS: consulta de hijos y su actividad; requiere rol parent.
+        // ANUNCIOS: anuncios globales activos publicados por el admin.
         // ============================================================
 
-        Route::prefix('parent')->middleware('role:parent')->group(function () {
-            Route::get('/children', [ParentController::class, 'index']);
-            Route::get('/children/{studentId}/progress', [ParentController::class, 'childProgress']);
-            Route::get('/children/{studentId}/report', [ParentController::class, 'childReport']);
+        Route::prefix('announcements')->group(function () {
+            Route::get('/', [AnnouncementController::class, 'index'])
+                ->middleware('cache.api');
         });
 
         // ============================================================
@@ -395,6 +419,14 @@ Route::prefix('v1')->group(function () {
                 Route::delete('/{id}', [SystemTranslationController::class, 'destroy']);
             });
 
+            // Anuncios globales del sistema
+            Route::prefix('announcements')->group(function () {
+                Route::get('/', [AnnouncementController::class, 'adminIndex']);
+                Route::post('/', [AnnouncementController::class, 'store']);
+                Route::put('/{id}', [AnnouncementController::class, 'update']);
+                Route::delete('/{id}', [AnnouncementController::class, 'destroy']);
+            });
+
             Route::post('/achievements/sync', [GamificationController::class, 'sync']);
         });
 
@@ -402,18 +434,22 @@ Route::prefix('v1')->group(function () {
     // GAMIFICACIÓN: prefijo con rol student; cada endpoint gestiona logros del estudiante.
     // ============================================================
 
-    Route::prefix('gamification')->middleware(['role:student'])->group(function () {
+    Route::prefix('gamification')->group(function () {
+        // Resumen propio del estudiante
         Route::get('/summary', [GamificationController::class, 'summary'])
-            ->middleware('cache.api');
+            ->middleware(['role:student', 'cache.api']);
         Route::post('/check', [GamificationController::class, 'check'])
-            ->middleware('throttle:20,1');
+            ->middleware(['role:student', 'throttle:20,1']);
+        // Vista docente de la gamificación de un alumno
+        Route::get('/student/{studentId}', [GamificationController::class, 'studentSummary'])
+            ->middleware(['role:teacher', 'cache.api']);
     });
 
     // ============================================================
     // CALENDARIO: prefijo limitado a docentes/admin para gestionar eventos académicos.
     // ============================================================
 
-    Route::prefix('calendar')->middleware(['role:teacher,admin'])->group(function () {
+    Route::prefix('calendar')->middleware(['role:teacher'])->group(function () {
         Route::get('/', [AcademicEventController::class, 'index'])
             ->middleware('cache.api');
         Route::post('/', [AcademicEventController::class, 'store']);
@@ -452,10 +488,17 @@ Route::prefix('v1')->group(function () {
 
     Route::prefix('forum')->middleware(['throttle:30,1'])->group(function () {
         Route::get('/', [ForumController::class, 'index']);
-        Route::post('/', [ForumController::class, 'store']);
+        // Crear hilos: solo docentes (jerarquía incluye coordinador/director)
+        Route::post('/', [ForumController::class, 'store'])
+            ->middleware('role:teacher');
         Route::get('/{id}', [ForumController::class, 'show']);
         Route::post('/{id}/post', [ForumController::class, 'post']);
-        Route::post('/{id}/close', [ForumController::class, 'close']);
+        // Moderación: editar y eliminar comentarios (autor o dueño del hilo)
+        Route::put('/posts/{postId}', [ForumController::class, 'updatePost']);
+        Route::delete('/posts/{postId}', [ForumController::class, 'deletePost']);
+        // Cerrar hilo: solo el docente dueño
+        Route::post('/{id}/close', [ForumController::class, 'close'])
+            ->middleware('role:teacher');
     });
 
     // ============================================================
@@ -463,54 +506,136 @@ Route::prefix('v1')->group(function () {
     // ============================================================
 
     Route::prefix('salones')->middleware(['throttle:60,1'])->group(function () {
-        Route::get('/', [SalonController::class, 'index']);
-        Route::post('/', [SalonController::class, 'store']);
-        Route::get('/{id}', [SalonController::class, 'show']);
-        Route::put('/{id}', [SalonController::class, 'update']);
-        Route::delete('/{id}', [SalonController::class, 'destroy']);
+        // Estudiante: listado deriva a sus cursos; docente/staff: sus salones
+        Route::get('/', [SalonController::class, 'index'])
+            ->middleware('role:student,teacher');
+        // Crear/editar/eliminar salones: coordinador o director
+        Route::post('/', [SalonController::class, 'store'])
+            ->middleware('role:coordinador');
+        Route::put('/{id}', [SalonController::class, 'update'])
+            ->middleware('role:coordinador');
+        Route::delete('/{id}', [SalonController::class, 'destroy'])
+            ->middleware('role:coordinador');
+        Route::get('/{id}', [SalonController::class, 'show'])
+            ->middleware('role:teacher');
 
         // Cursos del salón
-        Route::get('/{salonId}/courses', [SalonController::class, 'courses']);
-        Route::post('/{salonId}/courses', [SalonController::class, 'storeCourse']);
+        Route::get('/{salonId}/courses', [SalonController::class, 'courses'])
+            ->middleware('role:teacher');
+        Route::post('/{salonId}/courses', [SalonController::class, 'storeCourse'])
+            ->middleware('role:coordinador');
 
         // Alumnos del salón
-        Route::get('/{salonId}/students', [SalonController::class, 'salonStudents']);
-        Route::post('/{salonId}/students', [SalonController::class, 'storeStudent']);
-        Route::post('/{salonId}/students/import', [SalonController::class, 'importStudents']);
+        Route::get('/{salonId}/students', [SalonController::class, 'salonStudents'])
+            ->middleware('role:coordinador');
+        Route::post('/{salonId}/students', [SalonController::class, 'storeStudent'])
+            ->middleware('role:coordinador');
+        Route::post('/{salonId}/students/import', [SalonController::class, 'importStudents'])
+            ->middleware('role:coordinador');
     });
 
     // Catálogos para coordinador/director
-    Route::get('/catalog/teachers', [SalonController::class, 'teachers']);
-    Route::get('/catalog/students', [SalonController::class, 'students']);
+    Route::get('/catalog/teachers', [SalonController::class, 'teachers'])
+        ->middleware('role:coordinador');
+    Route::get('/catalog/students', [SalonController::class, 'students'])
+        ->middleware('role:coordinador');
+
+    // ============================================================
+    // GESTOR DE ALUMNOS: vista institucional por grado/sección y carga
+    // masiva (CSV/Excel). Acceso: docente, coordinador, director y admin.
+    // ============================================================
+    Route::prefix('students-manager')
+        ->middleware(['role:teacher', 'throttle:60,1'])
+        ->group(function () {
+            Route::get('/summary', [StudentManagerController::class, 'summary']);
+            Route::get('/', [StudentManagerController::class, 'index']);
+            Route::get('/template', [StudentManagerController::class, 'template']);
+            Route::get('/export', [StudentManagerController::class, 'export']);
+            Route::post('/import', [StudentManagerController::class, 'import'])->middleware('throttle:10,1');
+            Route::patch('/{id}', [StudentManagerController::class, 'update']);
+        });
 
     // CURSOS: edición, lecciones y matrícula; el grupo aplica límite de 60 solicitudes por minuto.
     Route::prefix('courses')->middleware(['throttle:60,1'])->group(function () {
-        Route::put('/{courseId}', [SalonController::class, 'updateCourse']);
-        Route::delete('/{courseId}', [SalonController::class, 'destroyCourse']);
+        // Auto-matrícula del estudiante por código de curso (antes de /{courseId})
+        Route::post('/enroll-by-code', [SalonController::class, 'enrollByCode'])
+            ->middleware('role:student');
 
-        Route::get('/{courseId}/lessons', [SalonController::class, 'courseLessons']);
-        Route::post('/{courseId}/lessons', [SalonController::class, 'storeLesson']);
+        // Editar/eliminar curso: coordinador o director
+        Route::put('/{courseId}', [SalonController::class, 'updateCourse'])
+            ->middleware('role:coordinador');
+        Route::delete('/{courseId}', [SalonController::class, 'destroyCourse'])
+            ->middleware('role:coordinador');
 
-        Route::post('/{courseId}/enroll', [SalonController::class, 'enroll']);
-        Route::post('/{courseId}/unenroll', [SalonController::class, 'unenroll']);
-        Route::get('/{courseId}/students', [SalonController::class, 'courseStudents']);
-        Route::get('/{courseId}', [SalonController::class, 'studentCourseDetail']);
+        // Lecciones del curso: estudiante matriculado o docente
+        Route::get('/{courseId}/lessons', [SalonController::class, 'courseLessons'])
+            ->middleware('role:student,teacher');
+        Route::post('/{courseId}/lessons', [SalonController::class, 'storeLesson'])
+            ->middleware('role:teacher');
 
-        // Auto-matrícula del estudiante por código de curso
-        Route::post('/enroll-by-code', [SalonController::class, 'enrollByCode']);
+        // Matrícula: docente en sus cursos (jerarquía incluye coordinador/director)
+        Route::post('/{courseId}/enroll', [SalonController::class, 'enroll'])
+            ->middleware('role:teacher');
+        Route::post('/{courseId}/unenroll', [SalonController::class, 'unenroll'])
+            ->middleware('role:teacher');
+        Route::get('/{courseId}/students', [SalonController::class, 'courseStudents'])
+            ->middleware('role:student,teacher');
+        Route::get('/{courseId}', [SalonController::class, 'studentCourseDetail'])
+            ->middleware('role:student,teacher');
     });
 
     // JUEGOS DIDÁCTICOS: catálogo, entregas y calificación; límite de 60 solicitudes por minuto.
     Route::prefix('games')->middleware(['throttle:60,1'])->group(function () {
         Route::get('/', [GameController::class, 'index']);
-        Route::post('/', [GameController::class, 'store']);
-        Route::get('/teacher-courses', [GameController::class, 'teacherCourses']);
+        // Crear/gestionar juegos: docente (jerarquía incluye coordinador/director)
+        Route::post('/', [GameController::class, 'store'])
+            ->middleware('role:teacher');
+        Route::get('/teacher-courses', [GameController::class, 'teacherCourses'])
+            ->middleware('role:teacher');
+        // Historial de entregas del estudiante (antes de /{gameId})
+        Route::get('/my-submissions', [GameController::class, 'mySubmissions'])
+            ->middleware('role:student');
         Route::get('/{gameId}', [GameController::class, 'show']);
-        Route::put('/{gameId}', [GameController::class, 'update']);
-        Route::delete('/{gameId}', [GameController::class, 'destroy']);
-        Route::post('/{gameId}/screenshot', [GameController::class, 'uploadScreenshot']);
-        Route::post('/{gameId}/submit', [GameController::class, 'submit']);
-        Route::post('/submissions/{submissionId}/grade', [GameController::class, 'grade']);
+        Route::put('/{gameId}', [GameController::class, 'update'])
+            ->middleware('role:teacher');
+        Route::delete('/{gameId}', [GameController::class, 'destroy'])
+            ->middleware('role:teacher');
+        Route::post('/{gameId}/screenshot', [GameController::class, 'uploadScreenshot'])
+            ->middleware('role:student');
+        Route::post('/{gameId}/submit', [GameController::class, 'submit'])
+            ->middleware('role:student');
+        Route::post('/submissions/{submissionId}/grade', [GameController::class, 'grade'])
+            ->middleware('role:teacher');
+    });
+
+    // ============================================================
+    // ASISTENCIA: registro docente por curso/fecha; consulta del estudiante.
+    // ============================================================
+
+    Route::prefix('attendance')->middleware(['throttle:60,1'])->group(function () {
+        // Docente (o coordinador/director) registra/actualiza asistencia
+        Route::post('/', [AttendanceController::class, 'store'])
+            ->middleware('role:teacher');
+        // Asistencia de un curso en una fecha
+        Route::get('/', [AttendanceController::class, 'index'])
+            ->middleware(['role:teacher', 'cache.api']);
+        // Resumen de asistencia por estudiante del curso
+        Route::get('/summary', [AttendanceController::class, 'summary'])
+            ->middleware(['role:teacher', 'cache.api']);
+        // Historial propio del estudiante
+        Route::get('/my', [AttendanceController::class, 'my'])
+            ->middleware(['role:student', 'cache.api']);
+    });
+
+    // ============================================================
+    // INSTITUCIÓN: panel para director y coordinador.
+    // ============================================================
+
+    Route::prefix('institution')->middleware(['role:coordinador'])->group(function () {
+        Route::get('/overview', [InstitutionController::class, 'overview'])
+            ->middleware('cache.api');
+        Route::get('/teachers', [InstitutionController::class, 'teachers'])
+            ->middleware('cache.api');
     });
     });
 
@@ -518,6 +643,7 @@ Route::prefix('v1')->group(function () {
 
     // CONSULTA DE INVITADOS: búsqueda de estudiante y generación de captcha con límites por ruta.
     Route::post('/guest/student-lookup', [GuestStudentController::class, 'lookup'])->middleware('throttle:5,1');
+    Route::post('/guest/student-lookup/export', [GuestStudentController::class, 'exportLookup'])->middleware('throttle:5,1');
     Route::get('/guest/captcha', [GuestStudentController::class, 'generateCaptcha'])->middleware('throttle:10,1');
 
     // ============================================================

@@ -53,6 +53,11 @@ class LessonController extends Controller
         // Si es estudiante, solo mostrar lecciones publicadas
         if (Auth::user()->isStudent()) {
             $query->where('is_published', true);
+
+            // Aislamiento por grado: el estudiante solo ve las lecciones
+            // de su propio grado (p. ej. 4to no ve las de 5to ni viceversa).
+            $grade = $this->studentGrade(Auth::user());
+            $query->where('grade', $grade ?? '__sin_grado__');
         }
 
         // Si es docente, mostrar sus lecciones
@@ -84,6 +89,26 @@ class LessonController extends Controller
     }
 
     /**
+     * Grado escolar canónico del estudiante (1ro..5to). Prioriza el grado de
+     * su salón; si no tiene salón, normaliza el campo grade del usuario
+     * (acepta variantes como "2ro", "1ro Secundaria"). Null si es indefinido.
+     */
+    private function studentGrade($user): ?string
+    {
+        $raw = $user->salon?->grade ?: $user->grade;
+
+        if (!is_string($raw) || trim($raw) === '') {
+            return null;
+        }
+
+        if (preg_match('/^([1-5])/', trim($raw), $m)) {
+            return ['1' => '1ro', '2' => '2do', '3' => '3ro', '4' => '4to', '5' => '5to'][$m[1]];
+        }
+
+        return null;
+    }
+
+    /**
      * Mostrar una lección específica con su contenido completo
      */
     public function show($id)
@@ -92,11 +117,21 @@ class LessonController extends Controller
             ->findOrFail($id);
 
         // Verificar si el estudiante puede ver esta lección
-        if (Auth::user()->isStudent() && !$lesson->is_published) {
-            return response()->json([
-                'success' => false,
-                'message' => __('lesson_not_available')
-            ], 403);
+        if (Auth::user()->isStudent()) {
+            if (!$lesson->is_published) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('lesson_not_available')
+                ], 403);
+            }
+
+            // Aislamiento por grado: prohibido ver lecciones de otro grado.
+            if ($lesson->grade !== $this->studentGrade(Auth::user())) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('lesson_not_available')
+                ], 403);
+            }
         }
 
         // Obtener progreso del estudiante
@@ -137,11 +172,21 @@ class LessonController extends Controller
     {
         $lesson = Lesson::findOrFail($id);
 
-        if (Auth::user()->isStudent() && !$lesson->is_published) {
-            return response()->json([
-                'success' => false,
-                'message' => __('lesson_not_available')
-            ], 403);
+        if (Auth::user()->isStudent()) {
+            if (!$lesson->is_published) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('lesson_not_available')
+                ], 403);
+            }
+
+            // Aislamiento por grado también en el endpoint de contenido.
+            if ($lesson->grade !== $this->studentGrade(Auth::user())) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('lesson_not_available')
+                ], 403);
+            }
         }
 
         return response()->json([
@@ -174,7 +219,8 @@ class LessonController extends Controller
             'resources.*.type' => 'required|in:pdf,video,image,link,audio',
             'resources.*.url' => 'required|string|url',
             'resources.*.title' => 'required|string|max:255',
-            'order' => 'nullable|integer|min:0'
+            'order' => 'nullable|integer|min:0',
+            'grade' => 'nullable|in:1ro,2do,3ro,4to,5to'
         ]);
 
         $validated['content'] = $this->sanitizeHtml($validated['content']);
@@ -192,6 +238,7 @@ class LessonController extends Controller
             'estimated_time' => $validated['estimated_time'] ?? 45,
             'resources' => $validated['resources'] ?? [],
             'order' => $validated['order'] ?? 0,
+            'grade' => $validated['grade'] ?? null,
             'is_published' => false,
             'views_count' => 0
         ]);
@@ -312,7 +359,8 @@ class LessonController extends Controller
             'resources.*.url' => 'required|string|url',
             'resources.*.title' => 'required|string|max:255',
             'order' => 'nullable|integer|min:0',
-            'is_published' => 'nullable|boolean'
+            'is_published' => 'nullable|boolean',
+            'grade' => 'nullable|in:1ro,2do,3ro,4to,5to'
         ]);
 
         if (isset($validated['content'])) {

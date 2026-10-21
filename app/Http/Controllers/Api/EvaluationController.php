@@ -14,7 +14,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\EvaluationResultExport;
 use App\Services\ActivityService;
+use App\Services\GroqAnswerGrader;
+use App\Models\InstitutionConfig;
+use App\Support\EvaluationAnswerFormatter;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Gestiona evaluaciones, preguntas, entregas, resultados y estadísticas de rendimiento.
@@ -60,6 +67,25 @@ class EvaluationController extends Controller
         // Si es estudiante, solo mostrar evaluaciones publicadas
         if (Auth::user()->isStudent()) {
             $query->where('is_published', true);
+
+            // Aislamiento por grado: solo evaluaciones de lecciones de su grado.
+            $studentGrade = $this->studentGradeOf(Auth::user());
+            $query->whereHas('lesson', fn ($q) => $q->where('grade', $studentGrade ?? '__sin_grado__'));
+
+            $query->orderByRaw(
+                'CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM evaluation_results
+                        WHERE evaluation_results.evaluation_id = evaluations.id
+                            AND evaluation_results.user_id = ?
+                            AND evaluation_results.status = ?
+                    ) THEN 1
+                    WHEN evaluations.due_date IS NOT NULL AND evaluations.due_date < ? THEN 2
+                    ELSE 0
+                END',
+                [Auth::id(), EvaluationResult::STATUS_COMPLETED, now()]
+            );
             
             // Mostrar solo evaluaciones disponibles (fecha de entrega no pasada)
             if ($request->has('available') && $request->available) {
@@ -102,7 +128,7 @@ class EvaluationController extends Controller
      */
     public function show($id)
     {
-        $evaluation = Evaluation::with(['teacher', 'lesson', 'questions'])
+        $evaluation = Evaluation::with(['teacher', 'lesson.course.salon', 'lesson.course.teacher', 'questions'])
             ->findOrFail($id);
 
         // Verificar permisos
@@ -112,6 +138,11 @@ class EvaluationController extends Controller
                     'success' => false,
                     'message' => __('evaluation_not_available')
                 ], 403);
+            }
+
+            // Aislamiento por grado: prohibido ver evaluaciones de otro grado.
+            if ($gradeDenied = $this->gradeViolation($evaluation)) {
+                return $gradeDenied;
             }
 
             // Verificar si el estudiante ya la completó
@@ -125,10 +156,10 @@ class EvaluationController extends Controller
             }
         }
 
-        // Ocultar respuestas correctas a estudiantes y padres
-        if (Auth::user()->isStudent() || Auth::user()->isParent()) {
+        // Ocultar respuestas correctas a estudiantes
+        if (Auth::user()->isStudent()) {
             foreach ($evaluation->questions as $question) {
-                $question->makeHidden(['correct_answer']);
+                $question->makeHidden(['correct_answer', 'correct_answer_display']);
             }
         }
 
@@ -349,13 +380,19 @@ class EvaluationController extends Controller
             ], 403);
         }
 
+        // Aislamiento por grado para estudiantes.
+        if ($gradeDenied = $this->gradeViolation($evaluation)) {
+            return $gradeDenied;
+        }
+
         $questions = $evaluation->questions()
             ->orderBy('order', 'asc')
             ->get();
 
-        // Si es estudiante o padre, ocultar respuestas correctas
-        if (Auth::user()->isStudent() || Auth::user()->isParent()) {
+        // Si es estudiante, ocultar respuestas correctas
+        if (Auth::user()->isStudent()) {
             $questions->makeHidden(['correct_answer']);
+            $questions->each->makeHidden('correct_answer_display');
         }
 
         return response()->json([
@@ -507,6 +544,11 @@ class EvaluationController extends Controller
             ], 403);
         }
 
+        // Aislamiento por grado para estudiantes.
+        if ($gradeDenied = $this->gradeViolation($evaluation)) {
+            return $gradeDenied;
+        }
+
         // Verificar fecha límite
         if ($evaluation->due_date && now() > $evaluation->due_date) {
             return response()->json([
@@ -516,21 +558,22 @@ class EvaluationController extends Controller
         }
 
         $validated = $request->validate([
-            'answers' => 'required|array',
-            'answers.*.question_id' => 'required|exists:questions,id',
+            'attempt_id' => 'nullable|uuid',
+            'answers' => 'present|array',
+            'answers.*.question_id' => 'required|exists:questions,id|distinct',
             'answers.*.answer' => 'required|string',
-            'time_taken' => 'nullable|integer|min:0'
+            'time_taken' => 'nullable|integer|min:0',
         ]);
 
-        // Validación server-side de time_taken: no puede ser menor que el 20% del time_limit
-        // ni mayor que 3x el time_limit (protege contra trampas y reports absurdos)
-        if ($evaluation->time_limit && isset($validated['time_taken'])) {
-            $minTime = (int) ($evaluation->time_limit * 60 * 0.2);
-            $maxTime = (int) ($evaluation->time_limit * 60 * 3);
-            $validated['time_taken'] = max($minTime, min($maxTime, $validated['time_taken']));
-        }
-
         $user = Auth::user();
+
+        if (isset($validated['attempt_id'])) {
+            EvaluationResult::where('id', $validated['attempt_id'])
+                ->where('user_id', $user->id)
+                ->where('evaluation_id', $evaluationId)
+                ->where('status', EvaluationResult::STATUS_PENDING)
+                ->firstOrFail();
+        }
 
         // Verificar intentos
         $attemptsCount = EvaluationResult::where('user_id', $user->id)
@@ -545,72 +588,134 @@ class EvaluationController extends Controller
             ], 403);
         }
 
-        DB::beginTransaction();
-
         try {
-            $questions = $evaluation->questions()->get();
+            $questions = $evaluation->questions()->orderBy('order')->get();
+            $validQuestionIds = $questions->modelKeys();
+            foreach ($validated['answers'] as $answerData) {
+                if (!in_array($answerData['question_id'], $validQuestionIds, true)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('evaluation_invalid_question'),
+                    ], 422);
+                }
+            }
             $totalQuestions = $questions->count();
             $correctAnswers = 0;
-            $totalPoints = $questions->sum('points');
-            $earnedPoints = 0;
+            $totalPoints = (float) $questions->sum('points');
+            $answerMap = collect($validated['answers'])->keyBy('question_id');
+            $aiItems = [];
+            $grades = [];
+            $aiGradingWarning = false;
 
-            // Crear resultado
-            $result = EvaluationResult::create([
-                'id' => Str::uuid(),
-                'user_id' => $user->id,
-                'evaluation_id' => $evaluationId,
-                'max_score' => 20,
-                'total_questions' => $totalQuestions,
-                'status' => EvaluationResult::STATUS_PENDING,
-                'started_at' => now(),
-                'attempt_number' => $attemptsCount + 1,
-                'time_taken' => $validated['time_taken'] ?? 0
-            ]);
-
-            // Procesar respuestas
-            foreach ($validated['answers'] as $answerData) {
-                $question = $questions->firstWhere('id', $answerData['question_id']);
-                
-                if (!$question) {
+            foreach ($questions as $index => $question) {
+                $answerData = $answerMap->get($question->id);
+                if (!$answerData) {
                     continue;
                 }
 
-                $isCorrect = $this->checkAnswer($question, $answerData['answer']);
-                $pointsEarned = $isCorrect ? $question->points : 0;
-
-                if ($isCorrect) {
-                    $correctAnswers++;
-                    $earnedPoints += $pointsEarned;
+                $answer = (string) $answerData['answer'];
+                $correctAnswer = $this->resolveCorrectAnswer($question);
+                if (EvaluationAnswerFormatter::isCorrect($question, $answer)) {
+                    $grades[$question->id] = (float) $question->points;
+                } elseif (empty($question->options)) {
+                    $aiItems[] = [
+                        'index' => $index,
+                        'question' => $question->question_text,
+                        'expected' => $correctAnswer,
+                        'answer' => $answer,
+                        'points' => (float) $question->points,
+                        'options' => $question->options ?? [],
+                        'explanation' => $question->explanation,
+                    ];
+                } else {
+                    $grades[$question->id] = 0.0;
                 }
-
-                StudentAnswer::create([
-                    'id' => Str::uuid(),
-                    'user_id' => $user->id,
-                    'evaluation_result_id' => $result->id,
-                    'question_id' => $question->id,
-                    'answer' => $answerData['answer'],
-                    'is_correct' => $isCorrect,
-                    'points_earned' => $pointsEarned
-                ]);
             }
 
-            // Calcular puntaje (escala 0-20)
-            $score = $totalPoints > 0 ? ($earnedPoints / $totalPoints) * 20 : 0;
+            if ($aiItems) {
+                try {
+                    $aiGrades = app(GroqAnswerGrader::class)->grade($aiItems);
+                    foreach ($aiItems as $item) {
+                        $question = $questions[$item['index']];
+                        $grades[$question->id] = $aiGrades[$item['index']];
+                    }
+                } catch (\Throwable $exception) {
+                    $aiGradingWarning = true;
+                    Log::warning('evaluation_ai_grading_unavailable', [
+                        'evaluation_id' => $evaluationId,
+                        'user_id' => $user->id,
+                        'reason' => $exception->getMessage(),
+                    ]);
+                    foreach ($aiItems as $item) {
+                        $grades[$questions[$item['index']]->id] = 0.0;
+                    }
+                }
+            }
 
-            // Actualizar resultado
-            $result->update([
-                'score' => round($score, 2),
-                'correct_answers' => $correctAnswers,
-                'status' => EvaluationResult::STATUS_COMPLETED,
-                'completed_at' => now()
-            ]);
+            $result = DB::transaction(function () use ($validated, $user, $evaluation, $evaluationId, $attemptsCount, $questions, $answerMap, $grades, $totalQuestions, $totalPoints, &$correctAnswers) {
+                $result = isset($validated['attempt_id'])
+                    ? EvaluationResult::where('id', $validated['attempt_id'])
+                        ->where('user_id', $user->id)
+                        ->where('evaluation_id', $evaluationId)
+                        ->where('status', EvaluationResult::STATUS_PENDING)
+                        ->lockForUpdate()
+                        ->firstOrFail()
+                    : EvaluationResult::create([
+                        'id' => Str::uuid(),
+                        'user_id' => $user->id,
+                        'evaluation_id' => $evaluationId,
+                        'max_score' => 20,
+                        'total_questions' => $totalQuestions,
+                        'status' => EvaluationResult::STATUS_PENDING,
+                        'started_at' => now(),
+                        'attempt_number' => $attemptsCount + 1,
+                    ]);
 
-            // Actualizar perfil del estudiante
-            $this->updateStudentProfile($user->id);
+                $earnedPoints = 0.0;
+                foreach ($questions as $question) {
+                    $answerData = $answerMap->get($question->id);
+                    if (!$answerData) {
+                        continue;
+                    }
 
-            ActivityService::log('evaluation_completed', $evaluation);
+                    $pointsEarned = min((float) $question->points, max(0, (float) ($grades[$question->id] ?? 0)));
+                    $isCorrect = $pointsEarned >= (float) $question->points;
+                    $earnedPoints += $pointsEarned;
+                    if ($isCorrect) {
+                        $correctAnswers++;
+                    }
 
-            DB::commit();
+                    StudentAnswer::create([
+                        'id' => Str::uuid(),
+                        'user_id' => $user->id,
+                        'evaluation_result_id' => $result->id,
+                        'question_id' => $question->id,
+                        'answer' => $answerData['answer'],
+                        'is_correct' => $isCorrect,
+                        'points_earned' => $pointsEarned,
+                    ]);
+                }
+
+                $startedAt = $result->started_at ?? now();
+                $elapsedSeconds = max(0, now()->timestamp - $startedAt->timestamp);
+                if ($evaluation->time_limit) {
+                    $elapsedSeconds = min($elapsedSeconds, $evaluation->time_limit * 60);
+                }
+
+                $result->update([
+                    'score' => $totalPoints > 0 ? round(($earnedPoints / $totalPoints) * 20, 2) : 0,
+                    'correct_answers' => $correctAnswers,
+                    'total_questions' => $totalQuestions,
+                    'time_taken' => $elapsedSeconds,
+                    'status' => EvaluationResult::STATUS_COMPLETED,
+                    'completed_at' => now(),
+                ]);
+
+                $this->updateStudentProfile($user->id);
+                ActivityService::log('evaluation_completed', $evaluation);
+
+                return $result;
+            });
 
             return response()->json([
                 'success' => true,
@@ -619,18 +724,96 @@ class EvaluationController extends Controller
                     'result' => $result->load('studentAnswers.question'),
                     'score' => $result->score,
                     'correct_answers' => $correctAnswers,
-                    'total_questions' => $totalQuestions
-                ]
+                    'total_questions' => $totalQuestions,
+                    'grading_warning' => $aiGradingWarning
+                        ? 'No se pudo contactar con Groq; las respuestas de texto no exactas recibieron 0 puntos. Revisa la configuración de GROQ_API_KEY.'
+                        : null,
+                ],
             ]);
 
         } catch (\Exception $e) {
-            DB::rollBack();
             report($e);
             return response()->json([
                 'success' => false,
                 'message' => __('evaluation_submit_error')
             ], 500);
         }
+    }
+
+    public function start(Request $request, $evaluationId)
+    {
+        $evaluation = Evaluation::findOrFail($evaluationId);
+        if (!$evaluation->is_published || ($evaluation->due_date && now() > $evaluation->due_date)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('evaluation_not_available'),
+            ], 403);
+        }
+
+        // Aislamiento por grado para estudiantes.
+        if ($gradeDenied = $this->gradeViolation($evaluation)) {
+            return $gradeDenied;
+        }
+
+        $user = Auth::user();
+        $result = DB::transaction(function () use ($evaluation, $user) {
+            $pending = EvaluationResult::where('evaluation_id', $evaluation->id)
+                ->where('user_id', $user->id)
+                ->where('status', EvaluationResult::STATUS_PENDING)
+                ->lockForUpdate()
+                ->latest('started_at')
+                ->first();
+
+            if ($pending) {
+                return $pending;
+            }
+
+            $attemptsCount = EvaluationResult::where('evaluation_id', $evaluation->id)
+                ->where('user_id', $user->id)
+                ->where('status', EvaluationResult::STATUS_COMPLETED)
+                ->count();
+            if ($attemptsCount >= $evaluation->max_attempts) {
+                abort(403, __('evaluation_max_attempts_reached'));
+            }
+
+            return EvaluationResult::create([
+                'id' => Str::uuid(),
+                'user_id' => $user->id,
+                'evaluation_id' => $evaluation->id,
+                'max_score' => 20,
+                'total_questions' => $evaluation->questions()->count(),
+                'status' => EvaluationResult::STATUS_PENDING,
+                'started_at' => now(),
+                'attempt_number' => $attemptsCount + 1,
+            ]);
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $result->id,
+                'started_at' => $result->started_at,
+                'time_limit' => $evaluation->time_limit,
+                'allow_tab_switches' => InstitutionConfig::first()?->allow_tab_switches ?? true,
+                'tab_switch_count' => $result->tab_switch_count,
+            ],
+        ], 201);
+    }
+
+    public function reportTabSwitch(Request $request, $evaluationId, $attemptId)
+    {
+        $result = EvaluationResult::where('id', $attemptId)
+            ->where('evaluation_id', $evaluationId)
+            ->where('user_id', Auth::id())
+            ->where('status', EvaluationResult::STATUS_PENDING)
+            ->firstOrFail();
+
+        $result->increment('tab_switch_count');
+
+        return response()->json([
+            'success' => true,
+            'tab_switch_count' => $result->fresh()->tab_switch_count,
+        ]);
     }
 
     /**
@@ -679,6 +862,42 @@ class EvaluationController extends Controller
             'success' => true,
             'data' => $results
         ]);
+    }
+
+    public function exportStudentResultPdf($evaluationId, $resultId)
+    {
+        [$evaluation, $result, $student] = $this->getOwnedCompletedResult($evaluationId, $resultId);
+
+        return Pdf::loadView('evaluations.result-pdf', [
+            'evaluation' => $evaluation,
+            'result' => $result,
+            'student' => $student,
+        ])->download("evaluacion-{$evaluationId}-resultado.pdf");
+    }
+
+    public function exportStudentResultExcel($evaluationId, $resultId)
+    {
+        [$evaluation, $result, $student] = $this->getOwnedCompletedResult($evaluationId, $resultId);
+
+        return Excel::download(
+            new EvaluationResultExport($evaluation, $result, $student),
+            "evaluacion-{$evaluationId}-resultado.xlsx"
+        );
+    }
+
+    private function getOwnedCompletedResult($evaluationId, $resultId): array
+    {
+        $evaluation = Evaluation::with(['teacher', 'lesson.course.salon', 'lesson.course.teacher'])
+            ->findOrFail($evaluationId);
+        $student = Auth::user();
+        $result = EvaluationResult::where('id', $resultId)
+            ->where('evaluation_id', $evaluationId)
+            ->where('user_id', $student->id)
+            ->where('status', EvaluationResult::STATUS_COMPLETED)
+            ->with('studentAnswers.question')
+            ->firstOrFail();
+
+        return [$evaluation, $result, $student];
     }
 
     /**
@@ -878,7 +1097,7 @@ class EvaluationController extends Controller
 
         if ($user->isStudent()) {
             $evaluation->questions->each(function ($question) {
-                $question->makeHidden(['correct_answer']);
+                $question->makeHidden(['correct_answer', 'correct_answer_display']);
             });
 
             $result = EvaluationResult::where('user_id', $user->id)
@@ -910,12 +1129,14 @@ class EvaluationController extends Controller
     /**
      * Verificar si una respuesta es correcta
      */
+    private function resolveCorrectAnswer(Question $question): string
+    {
+        return EvaluationAnswerFormatter::correctAnswer($question);
+    }
+
     private function checkAnswer($question, $answer)
     {
-        $normalizedAnswer = $this->normalizeAnswer($answer);
-        $normalizedCorrect = $this->normalizeAnswer($question->correct_answer);
-
-        return $normalizedAnswer === $normalizedCorrect;
+        return EvaluationAnswerFormatter::isCorrect($question, $answer);
     }
 
     /**
@@ -1029,5 +1250,46 @@ class EvaluationController extends Controller
         }
 
         return $distribution;
+    }
+
+    /**
+     * Grado escolar canónico del estudiante (1ro..5to), derivado de su
+     * salón o del campo grade del usuario. Null si es indefinido.
+     */
+    private function studentGradeOf($user): ?string
+    {
+        $raw = $user->salon?->grade ?: $user->grade;
+
+        if (!is_string($raw) || trim($raw) === '') {
+            return null;
+        }
+
+        if (preg_match('/^([1-5])/', trim($raw), $m)) {
+            return ['1' => '1ro', '2' => '2do', '3' => '3ro', '4' => '4to', '5' => '5to'][$m[1]];
+        }
+
+        return null;
+    }
+
+    /**
+     * Aislamiento por grado: devuelve respuesta 403 si un estudiante
+     * intenta acceder a una evaluación cuya lección pertenece a otro
+     * grado (o no tiene lección). Null si el acceso está permitido.
+     */
+    private function gradeViolation($evaluation): ?\Illuminate\Http\JsonResponse
+    {
+        if (!Auth::user()->isStudent()) {
+            return null;
+        }
+
+        $lessonGrade = $evaluation->lesson?->grade;
+        if ($lessonGrade === null || $lessonGrade !== $this->studentGradeOf(Auth::user())) {
+            return response()->json([
+                'success' => false,
+                'message' => __('evaluation_not_available'),
+            ], 403);
+        }
+
+        return null;
     }
 }

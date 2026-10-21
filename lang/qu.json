@@ -97,6 +97,7 @@
     "evaluation_duplicated": "Sutiykay tuplichay tukuy",
     "evaluation_duplicate_error": "Sutiykay tuplichayta mana",
     "evaluation_no_permission_view_stats": "Mana kay sutiykay estadísticas rikuyta atinchik",
+    "evaluation_invalid_question": "Kay sutiykay mana chaninchaw tapukuyta charin",
     "lesson_not_available": "Kay yachaykay kanman",
     "lesson_created": "Yachaykay tukuy",
     "lesson_no_permission_edit": "Mana kay yachaykay llanthurayta atinchik",
@@ -183,5 +184,17 @@
     "intermediate_level": "Nimariq",
     "advanced_level": "Llakiq",
     "adaptive_evaluation": "Llaktasqa Sutiykay",
-    "points_to_next_level": "wakin nivelpaq puntos"
+    "points_to_next_level": "wakin nivelpaq puntos",
+    "announcement_created": "Willakuqa lluqsichisqa",
+    "announcement_updated": "Willakuqa allinchasqa",
+    "announcement_deleted": "Willakuqa chinkasqa",
+    "attendance_saved": "Kayna lluqsichisqa allinmi",
+    "attendance_course_forbidden": "Kay cursopa kayninta mana atiwankichu kamariy",
+    "gamification_student_forbidden": "Kay yachayku paq ruraykuna mana qawashunkichu",
+    "gamification_student_not_found": "Yachayku mana tarikunchu",
+    "forum_post_updated": "Qillqasqa allinchasqa",
+    "forum_post_deleted": "Qillqasqa chinkasqa",
+    "forum_post_forbidden": "Kay qillqasqata mana atiwankichu kamariy",
+    "student_profile_updated": "Yachayku perfil allinchasqa",
+    "student_profile_forbidden": "Sapan yachaykukuna allinchay atinku"
 }

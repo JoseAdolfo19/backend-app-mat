@@ -483,6 +483,63 @@ class ProgressController extends Controller
         ]);
     }
 
+    // ========== REPORTE PROPIO (estudiante) ==========
+
+    /** Descarga el reporte de progreso del estudiante autenticado en PDF. */
+    public function exportMyReportPdf()
+    {
+        $service = app(\App\Services\StudentReportService::class);
+
+        return $service->pdf(Auth::id(), 'mi-reporte.pdf');
+    }
+
+    /** Descarga el reporte de progreso del estudiante autenticado en Excel. */
+    public function exportMyReportExcel()
+    {
+        $service = app(\App\Services\StudentReportService::class);
+
+        return $service->excel(Auth::id(), 'mi-reporte.xlsx');
+    }
+
+    // ========== PERFIL ACADÉMICO PROPIO (estudiante) ==========
+
+    /** Actualiza el grado y el nivel académico del estudiante autenticado. */
+    public function updateMyStudentProfile(Request $request)
+    {
+        $user = Auth::user();
+
+        if (!$user->isStudent()) {
+            return response()->json(['message' => __('student_profile_forbidden')], 403);
+        }
+
+        $validated = $request->validate([
+            'grade' => 'sometimes|string|max:50',
+            'academic_level' => 'sometimes|in:basic,intermediate,advanced',
+        ]);
+
+        if (array_key_exists('grade', $validated)) {
+            $user->update(['grade' => $validated['grade']]);
+        }
+
+        if (array_key_exists('academic_level', $validated)) {
+            $profile = $user->studentProfile;
+            if (!$profile) {
+                $profile = \App\Models\StudentProfile::create([
+                    'user_id' => $user->id,
+                    'academic_level' => $validated['academic_level'],
+                ]);
+            } else {
+                $profile->update(['academic_level' => $validated['academic_level']]);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => __('student_profile_updated'),
+            'data' => $user->fresh()->load('studentProfile'),
+        ]);
+    }
+
     // ========== MÉTODOS PRIVADOS ==========
 
     /**

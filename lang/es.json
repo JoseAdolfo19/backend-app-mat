@@ -97,6 +97,7 @@
     "evaluation_duplicated": "Evaluación duplicada exitosamente",
     "evaluation_duplicate_error": "Error al duplicar la evaluación",
     "evaluation_no_permission_view_stats": "No tienes permiso para ver las estadísticas de esta evaluación",
+    "evaluation_invalid_question": "La evaluación contiene una pregunta inválida o que no pertenece a esta evaluación",
     "lesson_not_available": "Esta lección no está disponible",
     "lesson_created": "Lección creada exitosamente",
     "lesson_no_permission_edit": "No tienes permiso para editar esta lección",
@@ -183,5 +184,17 @@
     "intermediate_level": "Intermedio",
     "advanced_level": "Avanzado",
     "adaptive_evaluation": "Evaluación Adaptativa",
-    "points_to_next_level": "puntos para el siguiente nivel"
+    "points_to_next_level": "puntos para el siguiente nivel",
+    "announcement_created": "Anuncio publicado",
+    "announcement_updated": "Anuncio actualizado",
+    "announcement_deleted": "Anuncio eliminado",
+    "attendance_saved": "Asistencia registrada correctamente",
+    "attendance_course_forbidden": "No tienes permiso para administrar la asistencia de este curso",
+    "gamification_student_forbidden": "No tienes acceso a la gamificación de este estudiante",
+    "gamification_student_not_found": "Estudiante no encontrado",
+    "forum_post_updated": "Comentario actualizado",
+    "forum_post_deleted": "Comentario eliminado",
+    "forum_post_forbidden": "No tienes permiso para moderar este comentario",
+    "student_profile_updated": "Perfil académico actualizado",
+    "student_profile_forbidden": "Solo los estudiantes pueden editar este perfil"
 }

@@ -105,6 +105,7 @@ return [
     'evaluation_duplicated' => 'Sutiykay tuplichay tukuy',
     'evaluation_duplicate_error' => 'Sutiykay tuplichayta mana',
     'evaluation_no_permission_view_stats' => 'Mana kay sutiykay estadísticas rikuyta atinchik',
+    'evaluation_invalid_question' => 'Kay sutiykay mana chaninchaw tapukuyta charin',
 
     // Lesson
     'lesson_not_available' => 'Kay yachaykay kanman',

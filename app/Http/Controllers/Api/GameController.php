@@ -302,6 +302,27 @@ class GameController extends Controller
     }
 
     // ============================================================
+    // MIS ENTREGAS (estudiante)
+    // ============================================================
+
+    /** Historial de entregas del estudiante autenticado con su estado de revisión. */
+    public function mySubmissions(Request $request)
+    {
+        $submissions = GameSubmission::where('student_id', Auth::id())
+            ->with('game:id,title,platform,course_id')
+            ->orderByDesc('submitted_at')
+            ->paginate(min((int) ($request->per_page ?? 15), 50));
+
+        return response()->json([
+            'data' => $submissions->items(),
+            'meta' => [
+                'current_page' => $submissions->currentPage(),
+                'total' => $submissions->total(),
+            ],
+        ]);
+    }
+
+    // ============================================================
     // CATÁLOGO de cursos para el docente
     // ============================================================
 

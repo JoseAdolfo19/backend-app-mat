@@ -323,7 +323,8 @@ class AuthController extends Controller
             $user->update([
                 'google_id' => $googleUser->id,
                 'google_token' => $googleUser->token,
-                'provider' => 'google'
+                'provider' => 'google',
+                'profile_image' => $user->profile_image ?: $googleUser->avatar
             ]);
 
             return response()->json([

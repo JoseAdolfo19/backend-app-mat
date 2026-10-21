@@ -222,40 +222,14 @@ class ReportApiTest extends TestCase
             ->assertJsonPath('student.email', $this->student->email);
     }
 
-    public function test_admin_can_access_reports(): void
+    public function test_admin_cannot_access_reports(): void
     {
+        // El administrador ya no accede a los reportes académicos:
+        // es únicamente administrador de la configuración del sistema.
         Sanctum::actingAs($this->admin, ['web']);
 
-        $response = $this->getJson("{$this->baseUrl}/reports/performance");
-
-        $response->assertOk()
-            ->assertJsonStructure([
-                'data' => [
-                    'total_evaluations',
-                    'average_score',
-                    'total_students',
-                    'passing_rate',
-                ],
-            ]);
-
-        $response = $this->getJson("{$this->baseUrl}/reports/grades");
-
-        $response->assertOk()
-            ->assertJsonStructure([
-                'data',
-                'meta',
-                'summary',
-            ]);
-
-        $response = $this->getJson("{$this->baseUrl}/reports/student/{$this->student->id}");
-
-        $response->assertOk()
-            ->assertJsonStructure([
-                'student',
-                'stats',
-                'lesson_progress',
-                'evaluation_results',
-                'strengths',
-            ]);
+        $this->getJson("{$this->baseUrl}/reports/performance")->assertForbidden();
+        $this->getJson("{$this->baseUrl}/reports/grades")->assertForbidden();
+        $this->getJson("{$this->baseUrl}/reports/student/{$this->student->id}")->assertForbidden();
     }
 }

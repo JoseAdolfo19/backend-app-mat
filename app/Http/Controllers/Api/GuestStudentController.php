@@ -28,45 +28,9 @@ class GuestStudentController extends Controller
             'captcha_answer' => 'required|string',
         ]);
 
-        $decoded = $this->decodeCaptchaToken($validated['captcha_token']);
-        if (!$decoded) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Captcha inválido o expirado. Intente nuevamente.',
-            ], 422);
+        if ($error = $this->verifyCaptcha($validated)) {
+            return $error;
         }
-
-        if (time() > $decoded['expires_at']) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Captcha expirado. Intente nuevamente.',
-            ], 422);
-        }
-
-        $sessionCaptcha = $decoded['code'];
-        if (strtoupper($validated['captcha_answer']) !== strtoupper($sessionCaptcha)) {
-            $ipKey = 'captcha_attempts:' . $request->ip();
-            $dniKey = 'captcha_attempts_dni:' . $validated['dni'];
-            $attempts = (int) Cache::get($ipKey, 0) + 1;
-            Cache::put($ipKey, $attempts, now()->addMinutes(10));
-            $dniAttempts = (int) Cache::get($dniKey, 0) + 1;
-            Cache::put($dniKey, $dniAttempts, now()->addMinutes(10));
-            if ($attempts >= self::CAPTCHA_MAX_ATTEMPTS || $dniAttempts >= self::CAPTCHA_MAX_ATTEMPTS) {
-                Cache::forget($ipKey);
-                Cache::forget($dniKey);
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Demasiados intentos. Solicite un nuevo captcha.',
-                ], 429);
-            }
-            return response()->json([
-                'success' => false,
-                'message' => 'Captcha inválido. Intente nuevamente.',
-            ], 422);
-        }
-
-        Cache::forget('captcha_attempts:' . $request->ip());
-        Cache::forget('captcha_attempts_dni:' . $validated['dni']);
 
         $student = User::where('dni', $validated['dni'])
             ->whereHas('role', fn ($q) => $q->where('name', 'student'))
@@ -144,6 +108,92 @@ class GuestStudentController extends Controller
                 'grades_by_area' => $gradesByArea,
             ],
         ]);
+    }
+
+    /**
+     * Valida el CAPTCHA (token, expiración y respuesta) con límite de intentos.
+     * Devuelve null si es correcto o la respuesta de error correspondiente.
+     */
+    private function verifyCaptcha(array $validated): ?JsonResponse
+    {
+        $decoded = $this->decodeCaptchaToken($validated['captcha_token']);
+        if (!$decoded) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Captcha inválido o expirado. Intente nuevamente.',
+            ], 422);
+        }
+
+        if (time() > $decoded['expires_at']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Captcha expirado. Intente nuevamente.',
+            ], 422);
+        }
+
+        if (strtoupper($validated['captcha_answer']) !== strtoupper($decoded['code'])) {
+            $ipKey = 'captcha_attempts:' . request()->ip();
+            $dniKey = 'captcha_attempts_dni:' . $validated['dni'];
+            $attempts = (int) Cache::get($ipKey, 0) + 1;
+            Cache::put($ipKey, $attempts, now()->addMinutes(10));
+            $dniAttempts = (int) Cache::get($dniKey, 0) + 1;
+            Cache::put($dniKey, $dniAttempts, now()->addMinutes(10));
+            if ($attempts >= self::CAPTCHA_MAX_ATTEMPTS || $dniAttempts >= self::CAPTCHA_MAX_ATTEMPTS) {
+                Cache::forget($ipKey);
+                Cache::forget($dniKey);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Demasiados intentos. Solicite un nuevo captcha.',
+                ], 429);
+            }
+            return response()->json([
+                'success' => false,
+                'message' => 'Captcha inválido. Intente nuevamente.',
+            ], 422);
+        }
+
+        Cache::forget('captcha_attempts:' . request()->ip());
+        Cache::forget('captcha_attempts_dni:' . $validated['dni']);
+
+        return null;
+    }
+
+    /**
+     * Exporta el reporte del estudiante en PDF, Excel o CSV tras validar DNI y CAPTCHA.
+     * Consulta pública sin autenticación para padres/tutores.
+     */
+    public function exportLookup(Request $request)
+    {
+        $validated = $request->validate([
+            'dni' => 'required|string|size:8|digits:8',
+            'captcha_token' => 'required|string',
+            'captcha_answer' => 'required|string',
+            'format' => 'required|in:pdf,excel,csv',
+        ]);
+
+        if ($error = $this->verifyCaptcha($validated)) {
+            return $error;
+        }
+
+        $student = User::where('dni', $validated['dni'])
+            ->whereHas('role', fn ($q) => $q->where('name', 'student'))
+            ->first();
+
+        if (!$student) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Estudiante no encontrado con ese DNI.',
+            ], 404);
+        }
+
+        $service = app(\App\Services\StudentReportService::class);
+        $filename = 'reporte-estudiante-' . $validated['dni'];
+
+        return match ($validated['format']) {
+            'pdf' => $service->pdf($student->id, $filename . '.pdf'),
+            'excel' => $service->excel($student->id, $filename . '.xlsx'),
+            'csv' => $service->csv($student->id, $filename . '.csv'),
+        };
     }
 
     private function computeStreak(string $userId): int

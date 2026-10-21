@@ -7,8 +7,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Models\User;
 use App\Models\Role;
 use App\Models\Evaluation;
+use App\Models\Lesson;
 use App\Models\Question;
+use App\Models\EvaluationResult;
+use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
+use Illuminate\Support\Carbon;
 
 class EvaluationApiTest extends TestCase
 {
@@ -43,7 +47,25 @@ class EvaluationApiTest extends TestCase
             'role_id' => $studentRole->id,
             'is_active' => true,
             'provider' => 'email',
+            'grade' => '1ro',
         ]);
+    }
+
+    /**
+     * Lección del grado del estudiante de prueba, para cumplir el
+     * aislamiento por grado exigido al enviar evaluaciones.
+     */
+    private function gradedLessonId(): string
+    {
+        $lesson = Lesson::create([
+            'id' => \Illuminate\Support\Str::uuid(),
+            'title' => 'Lección de prueba',
+            'content' => 'Contenido de la lección',
+            'teacher_id' => $this->teacher->id,
+            'grade' => '1ro',
+        ]);
+
+        return $lesson->id;
     }
 
     public function test_teacher_can_list_evaluations(): void
@@ -266,6 +288,7 @@ class EvaluationApiTest extends TestCase
             'is_published' => true,
             'max_attempts' => 3,
             'time_limit' => 30,
+            'lesson_id' => $this->gradedLessonId(),
         ]);
 
         $question = Question::create([
@@ -304,6 +327,210 @@ class EvaluationApiTest extends TestCase
                 ],
             ])
             ->assertJsonPath('data.total_questions', 1);
+    }
+
+    public function test_numeric_answer_key_is_resolved_to_its_option_and_duration_uses_server_times(): void
+    {
+        $evaluation = Evaluation::create([
+            'id' => \Illuminate\Support\Str::uuid(),
+            'title' => 'Legacy answer key',
+            'teacher_id' => $this->teacher->id,
+            'type' => Evaluation::TYPE_QUIZ,
+            'difficulty' => Evaluation::DIFFICULTY_BASIC,
+            'is_published' => true,
+            'max_attempts' => 2,
+            'time_limit' => 30,
+            'lesson_id' => $this->gradedLessonId(),
+        ]);
+        $question = Question::create([
+            'id' => \Illuminate\Support\Str::uuid(),
+            'evaluation_id' => $evaluation->id,
+            'type' => Question::TYPE_MULTIPLE_CHOICE,
+            'question_text' => '¿Qué significa que sean congruentes?',
+            'options' => [
+                ['label' => 'A', 'value' => 'Tienen la misma forma y tamaño'],
+                ['label' => 'B', 'value' => 'Tienen distinto tamaño'],
+            ],
+            'correct_answer' => '1',
+            'points' => 2,
+        ]);
+
+        Sanctum::actingAs($this->student, ['web']);
+        $started = Carbon::parse('2026-10-17 15:00:00', 'America/Lima');
+        Carbon::setTestNow($started);
+        $startResponse = $this->postJson("{$this->baseUrl}/evaluations/{$evaluation->id}/start");
+        $attemptId = $startResponse->assertCreated()->json('data.id');
+        $this->postJson("{$this->baseUrl}/evaluations/{$evaluation->id}/attempts/{$attemptId}/tab-switch")
+            ->assertOk()
+            ->assertJsonPath('tab_switch_count', 1);
+
+        Carbon::setTestNow($started->copy()->addSeconds(95));
+        $submitResponse = $this->postJson("{$this->baseUrl}/evaluations/{$evaluation->id}/submit", [
+            'attempt_id' => $attemptId,
+            'answers' => [
+                ['question_id' => $question->id, 'answer' => 'Tienen la misma forma y tamaño'],
+            ],
+        ]);
+
+        $submitResponse->assertOk()
+            ->assertJsonPath('data.score', 20)
+            ->assertJsonPath('data.result.time_taken', 95)
+            ->assertJsonPath('data.result.tab_switch_count', 1);
+        $this->assertSame(
+            'A. Tienen la misma forma y tamaño',
+            $question->fresh()->correct_answer_display
+        );
+        $this->assertSame(95, $submitResponse->json('data.result.time_taken'));
+        Carbon::setTestNow();
+    }
+
+    public function test_numeric_answer_matching_the_raw_key_is_graded_correctly(): void
+    {
+        $evaluation = Evaluation::create([
+            'id' => \Illuminate\Support\Str::uuid(),
+            'title' => 'Clave numerica cruda',
+            'teacher_id' => $this->teacher->id,
+            'type' => Evaluation::TYPE_QUIZ,
+            'difficulty' => Evaluation::DIFFICULTY_BASIC,
+            'is_published' => true,
+            'max_attempts' => 1,
+            'lesson_id' => $this->gradedLessonId(),
+        ]);
+        $question = Question::create([
+            'id' => \Illuminate\Support\Str::uuid(),
+            'evaluation_id' => $evaluation->id,
+            'type' => Question::TYPE_MULTIPLE_CHOICE,
+            'question_text' => 'Cual opcion es correcta?',
+            'options' => [
+                ['label' => 'A', 'value' => 'Primera'],
+                ['label' => 'B', 'value' => 'Segunda'],
+                ['label' => 'C', 'value' => 'Tercera'],
+            ],
+            'correct_answer' => '1',
+            'points' => 3,
+        ]);
+
+        Sanctum::actingAs($this->student, ['web']);
+        $response = $this->postJson("{$this->baseUrl}/evaluations/{$evaluation->id}/submit", [
+            'answers' => [
+                ['question_id' => $question->id, 'answer' => '1'],
+            ],
+        ]);
+
+        // La clave '1' (1-based, opcion A) y la respuesta '1' deben coincidir
+        // aunque submittedAnswer() resuelva indices 0-based primero.
+        $response->assertOk()
+            ->assertJsonPath('data.score', 20)
+            ->assertJsonPath('data.correct_answers', 1);
+        $this->assertTrue(EvaluationResult::first()->studentAnswers()->first()->is_correct);
+    }
+
+    public function test_text_response_receives_partial_credit_from_groq(): void
+    {
+        config(['services.groq.key' => 'test-key']);
+        Http::fake([
+            config('services.groq.url') => Http::response([
+                'choices' => [[
+                    'message' => [
+                        'content' => json_encode([
+                            'grades' => [[
+                                'index' => 0,
+                                'points_awarded' => 0.5,
+                                'feedback' => 'Respuesta parcialmente correcta',
+                            ]],
+                        ]),
+                    ],
+                ]],
+            ]),
+        ]);
+
+        $evaluation = Evaluation::create([
+            'id' => \Illuminate\Support\Str::uuid(),
+            'title' => 'Partial credit',
+            'teacher_id' => $this->teacher->id,
+            'type' => Evaluation::TYPE_QUIZ,
+            'difficulty' => Evaluation::DIFFICULTY_BASIC,
+            'is_published' => true,
+            'max_attempts' => 2,
+            'lesson_id' => $this->gradedLessonId(),
+        ]);
+        $question = Question::create([
+            'id' => \Illuminate\Support\Str::uuid(),
+            'evaluation_id' => $evaluation->id,
+            'type' => Question::TYPE_FILL_BLANK,
+            'question_text' => 'Explica qué significa congruencia.',
+            'correct_answer' => 'Misma forma y tamaño',
+            'points' => 1,
+        ]);
+
+        Sanctum::actingAs($this->student, ['web']);
+        $response = $this->postJson("{$this->baseUrl}/evaluations/{$evaluation->id}/submit", [
+            'answers' => [
+                ['question_id' => $question->id, 'answer' => 'Figuras iguales'],
+            ],
+        ]);
+
+        $response->assertOk()->assertJsonPath('data.score', 10);
+        $this->assertSame(0.5, (float) EvaluationResult::first()->studentAnswers()->first()->points_earned);
+    }
+
+    public function test_groq_chat_returns_a_streamed_answer_and_uses_conversation_history(): void
+    {
+        config(['services.groq.key' => 'test-key']);
+        Http::fake([
+            config('services.groq.url') => Http::response([
+                'choices' => [[
+                    'message' => ['content' => '¡Claro! Una fracción representa partes iguales de un todo.'],
+                ]],
+            ]),
+        ]);
+        Sanctum::actingAs($this->student, ['web']);
+
+        $response = $this->postJson("{$this->baseUrl}/ai/chat", [
+            'message' => '¿Qué es una fracción?',
+            'messages' => [
+                ['role' => 'user', 'content' => 'Ayúdame con matemáticas'],
+                ['role' => 'assistant', 'content' => 'Claro, ¿qué tema?'],
+                ['role' => 'user', 'content' => '¿Qué es una fracción?'],
+            ],
+        ]);
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'text/event-stream; charset=UTF-8');
+        $this->assertStringContainsString('fracción representa partes iguales', $response->streamedContent());
+        Http::assertSent(fn ($request) =>
+            $request->url() === config('services.groq.url')
+            && $request['messages'][1]['content'] === 'Ayúdame con matemáticas'
+            && $request['messages'][3]['content'] === '¿Qué es una fracción?'
+        );
+    }
+
+    public function test_result_pdf_displays_utc_timestamps_in_lima_time(): void
+    {
+        $evaluation = Evaluation::make(['title' => 'Evaluación horaria']);
+        $evaluation->setRelation('teacher', $this->teacher);
+        $evaluation->setRelation('lesson', null);
+
+        $result = EvaluationResult::make([
+            'score' => 20,
+            'correct_answers' => 1,
+            'total_questions' => 1,
+            'started_at' => Carbon::parse('2026-10-17 20:00:00', 'UTC'),
+            'completed_at' => Carbon::parse('2026-10-17 20:08:00', 'UTC'),
+            'time_taken' => 480,
+            'attempt_number' => 1,
+            'tab_switch_count' => 0,
+        ]);
+        $result->setRelation('studentAnswers', collect());
+
+        $html = view('evaluations.result-pdf', [
+            'evaluation' => $evaluation,
+            'result' => $result,
+            'student' => $this->student,
+        ])->render();
+
+        $this->assertStringContainsString('17/10/2026 15:00', $html);
+        $this->assertStringContainsString('17/10/2026 15:08', $html);
     }
 
     public function test_teacher_can_view_results(): void

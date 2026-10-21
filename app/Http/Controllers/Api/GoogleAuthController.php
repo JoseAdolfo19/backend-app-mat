@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\StudentProfile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Http\Request;
@@ -37,12 +38,19 @@ class GoogleAuthController extends Controller
                 ->first();
 
             if ($user) {
+                $updates = [];
                 if (!$user->google_id) {
-                    $user->update([
+                    $updates = [
                         'google_id' => $googleUser->id,
                         'google_token' => $googleUser->token,
                         'provider' => 'google'
-                    ]);
+                    ];
+                }
+                if (!$user->profile_image && $googleUser->avatar) {
+                    $updates['profile_image'] = $googleUser->avatar;
+                }
+                if ($updates) {
+                    $user->update($updates);
                 }
 
                 if (!$user->is_active) {
@@ -79,6 +87,11 @@ class GoogleAuthController extends Controller
             // Use a short-lived auth code instead of the raw token in URL
             $code = Str::random(32);
             Cache::put('google_auth_code:' . $code, $token, now()->addMinutes(5));
+            Log::info('google_login_succeeded', [
+                'user_id' => $user->id,
+                'method' => 'oauth_callback',
+                'platform' => 'web',
+            ]);
 
             return redirect(config('app.url') . '/login?auth_code=' . $code);
         } catch (\Exception $e) {
@@ -113,11 +126,18 @@ class GoogleAuthController extends Controller
                 ->first();
 
             if ($user) {
+                $updates = [];
                 if (!$user->google_id) {
-                    $user->update([
+                    $updates = [
                         'google_id' => $googleId,
                         'provider' => 'google'
-                    ]);
+                    ];
+                }
+                if (!$user->profile_image && $avatar) {
+                    $updates['profile_image'] = $avatar;
+                }
+                if ($updates) {
+                    $user->update($updates);
                 }
                 if (!$user->is_active) {
                     return response()->json(['message' => __('google_user_inactive_contact_admin')], 403);
@@ -148,6 +168,11 @@ class GoogleAuthController extends Controller
             // Detectar plataforma desde header
             $platform = $this->resolvePlatform($request);
             $token = $user->createToken('auth_token', [$platform])->plainTextToken;
+            Log::info('google_login_succeeded', [
+                'user_id' => $user->id,
+                'method' => 'id_token',
+                'platform' => $platform,
+            ]);
 
             return response()->json([
                 'message' => __('google_auth_success'),

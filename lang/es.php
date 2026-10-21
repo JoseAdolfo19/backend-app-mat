@@ -105,6 +105,7 @@ return [
     'evaluation_duplicated' => 'Evaluación duplicada exitosamente',
     'evaluation_duplicate_error' => 'Error al duplicar la evaluación',
     'evaluation_no_permission_view_stats' => 'No tienes permiso para ver las estadísticas de esta evaluación',
+    'evaluation_invalid_question' => 'La evaluación contiene una pregunta inválida o que no pertenece a esta evaluación',
 
     // Lesson
     'lesson_not_available' => 'Esta lección no está disponible',

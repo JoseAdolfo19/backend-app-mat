@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\ActivityService;
+use App\Exceptions\GroqException;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Http\Client\ConnectionException;
 use RuntimeException;
 
 /**
@@ -60,22 +62,28 @@ EOT;
     private const DAILY_LIMIT = 50;
 
     /** Transmite la respuesta del asistente de IA como eventos enviados por el servidor. */
-    public function chat(Request $request): Response
+    public function chat(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'message' => 'required|string|max:4000',
+            'messages' => 'sometimes|array|max:12',
+            'messages.*.role' => 'required|in:user,assistant',
+            'messages.*.content' => 'required|string|max:4000',
         ]);
 
         $apiKey = config('services.groq.key');
 
         if (empty($apiKey)) {
-            return response()->json(['error' => 'AI service not configured.'], 500);
+            return response()->json([
+                'error' => 'El asistente no está configurado: falta GROQ_API_KEY en el servidor.',
+                'code' => 'not_configured',
+            ], 503);
         }
 
         $user = $request->user();
         $token = $user->currentAccessToken();
 
-        if ($token) {
+        if ($token && $token->exists) {
             $now = now();
             if (!$token->daily_reset_at || $token->daily_reset_at->diffInHours($now) >= 24) {
                 $token->update(['daily_requests' => 0, 'daily_reset_at' => $now]);
@@ -84,77 +92,113 @@ EOT;
             if ($token->daily_requests >= self::DAILY_LIMIT) {
                 return response()->json([
                     'error' => __('ai_daily_limit_reached'),
+                    'code' => 'rate_limit',
                 ], 429);
             }
 
             $token->increment('daily_requests');
         }
 
-        $messages = [
-            ['role' => 'system', 'content' => self::SYSTEM_PROMPT],
-            ['role' => 'user', 'content' => $request->input('message')],
-        ];
+        $conversation = collect($validated['messages'] ?? [])
+            ->map(fn ($item) => ['role' => $item['role'], 'content' => $item['content']])
+            ->all();
+        $lastMessage = end($conversation);
+        if (!$lastMessage || $lastMessage['role'] !== 'user' || $lastMessage['content'] !== $validated['message']) {
+            $conversation[] = ['role' => 'user', 'content' => $validated['message']];
+        }
 
-        $payload = json_encode([
-            'model' => config('services.groq.model'),
-            'messages' => $messages,
-            'max_tokens' => 2048,
-            'temperature' => 0.7,
-            'top_p' => 0.9,
-            'stream' => true,
-        ]);
+        // La resolucion DNS de esta maquina falla de forma intermitente, por lo
+        // que se reintenta automaticamente una vez antes de reportar el fallo.
+        $requestGroq = fn () => Http::withToken($apiKey)
+            ->acceptJson()
+            ->timeout(60)
+            ->connectTimeout(10)
+            ->post(config('services.groq.url'), [
+                'model' => config('services.groq.model'),
+                'messages' => array_merge(
+                    [['role' => 'system', 'content' => self::SYSTEM_PROMPT]],
+                    array_slice($conversation, -12)
+                ),
+                'max_tokens' => 2048,
+                'temperature' => 0.7,
+                'top_p' => 0.9,
+                'stream' => false,
+            ]);
+
+        try {
+            try {
+                $groqResponse = $requestGroq();
+            } catch (ConnectionException $firstFailure) {
+                report($firstFailure);
+                usleep(1500000); // 1.5 s antes del reintento
+                $groqResponse = $requestGroq();
+            }
+        } catch (ConnectionException $exception) {
+            report($exception);
+            return response()->json([
+                'error' => 'No se pudo conectar con el servicio de IA. Parece un problema de conexión de red. Revisa internet e inténtalo de nuevo.',
+                'code' => 'network',
+            ], 502);
+        }
+
+        if (!$groqResponse->successful()) {
+            $status = $groqResponse->status();
+            $providerMessage = $groqResponse->json('error.message');
+            \Illuminate\Support\Facades\Log::error('groq_chat_request_failed', [
+                'status' => $status,
+                'provider_message' => is_string($providerMessage) ? mb_substr($providerMessage, 0, 300) : null,
+            ]);
+
+            $message = match ($status) {
+                401, 403 => 'Groq rechazó la clave de API. Verifica GROQ_API_KEY en el servidor.',
+                429 => 'Groq alcanzó su límite temporal de solicitudes. Inténtalo más tarde.',
+                500, 502, 503, 504 => 'El servicio de IA está temporalmente no disponible. Inténtalo de nuevo más tarde.',
+                default => 'Groq no pudo completar la respuesta. Inténtalo de nuevo más tarde.',
+            };
+            $code = match ($status) {
+                401, 403 => 'auth',
+                429 => 'rate_limit',
+                500, 502, 503, 504 => 'provider',
+                default => 'provider',
+            };
+
+            return response()->json(['error' => $message, 'code' => $code], 502);
+        }
+
+        $content = $groqResponse->json('choices.0.message.content');
+        if (!is_string($content) || trim($content) === '') {
+            \Illuminate\Support\Facades\Log::error('groq_chat_empty_response', [
+                'model' => config('services.groq.model'),
+            ]);
+            return response()->json([
+                'error' => 'Groq devolvió una respuesta vacía. Inténtalo de nuevo.',
+                'code' => 'empty',
+            ], 502);
+        }
 
         ActivityService::log('chat_used');
 
-        $response = new Response(null, 200, [
-            'Content-Type' => 'text/event-stream',
-            'Cache-Control' => 'no-cache',
-            'X-Accel-Buffering' => 'no',
-            'Connection' => 'keep-alive',
-        ]);
-
-        // Streaming en tiempo real: cada chunk que llega de Groq se reenvía al
-        // cliente como SSE conforme se recibe, sin esperar a que termine.
-        $response->setCallback(function () use ($apiKey, $payload) {
-            $ch = curl_init(config('services.groq.url'));
-            curl_setopt_array($ch, [
-                CURLOPT_POST => true,
-                CURLOPT_RETURNTRANSFER => false,
-                CURLOPT_HTTPHEADER => [
-                    'Content-Type: application/json',
-                    'Authorization: Bearer ' . $apiKey,
-                ],
-                CURLOPT_POSTFIELDS => $payload,
-                CURLOPT_TIMEOUT => 60,
-                CURLOPT_SSL_VERIFYPEER => true,
-            ]);
-
-            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $chunk) {
-                foreach (explode("\n", $chunk) as $line) {
-                    $line = trim($line);
-                    if ($line === '') {
-                        continue;
-                    }
-                    echo $line . "\n\n";
-                    if (ob_get_level() > 0) {
-                        ob_flush();
-                    }
-                    flush();
+        return response()->stream(function () use ($content) {
+            foreach (mb_str_split($content, 48, 'UTF-8') as $chunk) {
+                echo 'data: ' . json_encode([
+                    'choices' => [['delta' => ['content' => $chunk]]],
+                ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n\n";
+                if (ob_get_level() > 0) {
+                    ob_flush();
                 }
-                return strlen($chunk);
-            });
-
-            curl_exec($ch);
-            curl_close($ch);
-
+                flush();
+            }
             echo "data: [DONE]\n\n";
             if (ob_get_level() > 0) {
                 ob_flush();
             }
             flush();
-        });
-
-        return $response;
+        }, 200, [
+            'Content-Type' => 'text/event-stream; charset=UTF-8',
+            'Cache-Control' => 'no-cache, no-transform',
+            'X-Accel-Buffering' => 'no',
+            'Connection' => 'keep-alive',
+        ]);
     }
 
     /**
@@ -169,13 +213,16 @@ EOT;
         ]);
 
         if (empty(config('services.groq.key'))) {
-            return response()->json(['error' => 'AI service not configured.'], 500);
+            return response()->json([
+                'error' => 'AI service not configured.',
+                'code' => 'not_configured',
+            ], 503);
         }
 
         $user = $request->user();
         $token = $user->currentAccessToken();
 
-        if ($token) {
+        if ($token && $token->exists) {
             $now = now();
             if (!$token->daily_reset_at || $token->daily_reset_at->diffInHours($now) >= 24) {
                 $token->update(['daily_requests' => 0, 'daily_reset_at' => $now]);
@@ -184,6 +231,7 @@ EOT;
             if ($token->daily_requests >= self::DAILY_LIMIT) {
                 return response()->json([
                     'error' => __('ai_daily_limit_reached'),
+                    'code' => 'rate_limit',
                 ], 429);
             }
 
@@ -225,8 +273,10 @@ EOT;
                 ['role' => 'system', 'content' => $systemPrompt],
                 ['role' => 'user', 'content' => $userPrompt],
             ], 4096);
+        } catch (GroqException $e) {
+            return response()->json(['error' => $e->getMessage(), 'code' => $e->errorCode], 502);
         } catch (RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], 502);
+            return response()->json(['error' => $e->getMessage(), 'code' => 'provider'], 502);
         }
 
         $data = $this->extractJson($content);
@@ -273,47 +323,100 @@ EOT;
                 $payload['response_format'] = $format;
             }
 
-            $ch = curl_init(config('services.groq.url'));
-            curl_setopt_array($ch, [
-                CURLOPT_POST => true,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HTTPHEADER => [
-                    'Content-Type: application/json',
-                    'Authorization: Bearer ' . $apiKey,
-                ],
-                CURLOPT_POSTFIELDS => json_encode($payload),
-                CURLOPT_TIMEOUT => 90,
-                CURLOPT_SSL_VERIFYPEER => true,
-            ]);
+            // La resolucion DNS falla de forma intermitente en este servidor,
+            // por lo que cada intento se prueba hasta 2 veces.
+            $content = null;
+            $lastError = null;
 
-            $raw = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
+            for ($try = 0; $try < 2; $try++) {
+                $ch = curl_init(config('services.groq.url'));
+                curl_setopt_array($ch, [
+                    CURLOPT_POST => true,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HTTPHEADER => [
+                        'Content-Type: application/json',
+                        'Authorization: Bearer ' . $apiKey,
+                    ],
+                    CURLOPT_POSTFIELDS => json_encode($payload),
+                    CURLOPT_TIMEOUT => 90,
+                    CURLOPT_CONNECTTIMEOUT => 10,
+                    CURLOPT_SSL_VERIFYPEER => true,
+                ]);
 
-            if ($curlError) {
-                $lastError = new RuntimeException('AI service connection failed.', 502);
-                continue;
-            }
+                $raw = curl_exec($ch);
+                $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlError = curl_error($ch);
+                $curlErrno = curl_errno($ch);
+                curl_close($ch);
 
-            if ($httpCode !== 200) {
+                if ($curlError !== '') {
+                    $isNetworkError = in_array($curlErrno, [6, 7, 9, 28, 35, 52, 56], true);
+                    $lastError = new GroqException(
+                        $isNetworkError
+                            ? 'No se pudo conectar con el servicio de IA. Parece un problema de conexión de red. Revisa internet e inténtalo de nuevo.'
+                            : 'Error de comunicación con el servicio de IA. Inténtalo de nuevo más tarde.',
+                        'network',
+                        502
+                    );
+                    if ($isNetworkError && $try === 0) {
+                        usleep(1500000); // 1.5 s antes del reintento
+                        continue;
+                    }
+                    break;
+                }
+
+                if ($httpCode !== 200) {
+                    $decoded = json_decode($raw, true);
+                    $providerMessage = $decoded['error']['message'] ?? null;
+
+                    $lastError = match (true) {
+                        in_array($httpCode, [401, 403], true) => new GroqException(
+                            'Groq rechazó la clave de API. Verifica GROQ_API_KEY en el servidor.',
+                            'auth',
+                            502
+                        ),
+                        $httpCode === 429 => new GroqException(
+                            'Groq alcanzó su límite temporal de solicitudes. Inténtalo más tarde.',
+                            'rate_limit',
+                            502
+                        ),
+                        in_array($httpCode, [500, 502, 503, 504], true) => new GroqException(
+                            'El servicio de IA está temporalmente no disponible. Inténtalo de nuevo más tarde.',
+                            'provider',
+                            502
+                        ),
+                        default => new GroqException(
+                            is_string($providerMessage)
+                                ? 'El servicio de IA no pudo procesar la solicitud: ' . mb_substr($providerMessage, 0, 200)
+                                : 'El servicio de IA devolvió HTTP ' . $httpCode . '. Inténtalo de nuevo.',
+                            'provider',
+                            502
+                        ),
+                    };
+                    break;
+                }
+
                 $decoded = json_decode($raw, true);
-                $lastError = new RuntimeException(
-                    $decoded['error']['message'] ?? 'AI service returned HTTP ' . $httpCode,
+                $content = $decoded['choices'][0]['message']['content'] ?? '';
+
+                if (trim($content) !== '' && is_array($this->extractJson($content))) {
+                    return $content;
+                }
+
+                $lastError = new GroqException(
+                    'El servicio de IA devolvió una respuesta vacía o inválida. Inténtalo de nuevo.',
+                    'empty',
                     502
                 );
-                continue;
+                break;
             }
 
-            $decoded = json_decode($raw, true);
-            $content = $decoded['choices'][0]['message']['content'] ?? '';
-
-            if (trim($content) !== '' && is_array($this->extractJson($content))) {
-                return $content;
+            if ($content !== null) {
+                break;
             }
         }
 
-        throw $lastError ?? new RuntimeException('AI service returned an empty response.', 502);
+        throw $lastError ?? new GroqException('El servicio de IA devolvió una respuesta vacía.', 'empty', 502);
     }
 
     private function extractJson(string $text): array

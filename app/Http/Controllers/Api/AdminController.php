@@ -66,7 +66,7 @@ class AdminController extends Controller
             'full_name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => 'required|string|min:8',
-            'role' => 'required|in:teacher,student,parent,director,coordinador',
+            'role' => 'required|in:teacher,student,director,coordinador',
             'institution' => 'nullable|string',
             'grade' => 'nullable|string'
         ]);
@@ -260,6 +260,7 @@ class AdminController extends Controller
             'background_color' => $config?->background_color ?? null,
             'surface_color' => $config?->surface_color ?? null,
             'logo' => $config?->logo ?? null,
+            'allow_tab_switches' => $config?->allow_tab_switches ?? true,
         ]);
     }
 
@@ -278,9 +279,10 @@ class AdminController extends Controller
             'tertiary_color' => 'sometimes|string|max:7',
             'background_color' => 'sometimes|string|max:7',
             'surface_color' => 'sometimes|string|max:7',
-            'logo' => 'nullable|string',
+            'logo' => 'nullable|string|max:2048',
             'email_notifications' => 'nullable|array',
-            'backup_frequency' => 'nullable|string'
+            'backup_frequency' => 'nullable|string',
+            'allow_tab_switches' => 'sometimes|boolean'
         ]);
 
         $config->update($validated);
@@ -445,7 +447,7 @@ class AdminController extends Controller
             }
 
             $role = Role::where('name', strtolower($roleName))->first();
-            if (!$role || !in_array($role->name, ['teacher', 'student', 'parent', 'director', 'coordinador'])) {
+            if (!$role || !in_array($role->name, ['teacher', 'student', 'director', 'coordinador'])) {
                 $errors[] = __('import_row_invalid_role', ['row' => $rowNum, 'role' => $roleName]);
                 continue;
             }

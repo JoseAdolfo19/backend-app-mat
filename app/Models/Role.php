@@ -19,7 +19,6 @@ class Role extends Model
     const ADMIN = 'admin';
     const TEACHER = 'teacher';
     const STUDENT = 'student';
-    const PARENT = 'parent';
     const DIRECTOR = 'director';
     const COORDINATOR = 'coordinador';
 
@@ -50,12 +49,6 @@ class Role extends Model
     public function scopeStudent($query)
     {
         return $query->where('name', self::STUDENT);
-    }
-
-    /** Filtra el rol de padre o tutor. */
-    public function scopeParent($query)
-    {
-        return $query->where('name', self::PARENT);
     }
 
     /** Filtra el rol de director. */

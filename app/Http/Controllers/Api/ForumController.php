@@ -7,6 +7,7 @@ use App\Models\ForumThread;
 use App\Models\ForumPost;
 use App\Models\Evaluation;
 use App\Models\EvaluationResult;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -17,8 +18,10 @@ class ForumController extends Controller
 {
     /**
      * Hilos visibles para el usuario autenticado.
-     * - Docente/coordinador/director: sus propios hilos.
-     * - Estudiante: hilos de docentes con los que tiene relación académica.
+     * - Admin: todos los hilos del sistema (rol de moderación).
+     * - Docente/coordinador/director: sus propios hilos y los avisos del admin.
+     * - Estudiante: hilos de docentes con los que tiene relación académica
+     *   y los avisos creados por el admin.
      */
     public function index(Request $request)
     {
@@ -28,12 +31,23 @@ class ForumController extends Controller
         $query = ForumThread::with(['teacher:id,full_name', 'lesson:id,title'])
             ->withCount('posts');
 
-        if (in_array($role, ['teacher', 'coordinador', 'director'])) {
-            $query->where('teacher_id', $user->id);
+        // IDs de administradores: sus hilos funcionan como avisos globales.
+        $adminIds = User::whereHas('role', fn ($q) => $q->where('name', 'admin'))->pluck('id');
+
+        if ($role === 'admin') {
+            // El administrador ve todo el foro.
+        } elseif (in_array($role, ['teacher', 'coordinador', 'director'])) {
+            $query->where(function ($q) use ($user, $adminIds) {
+                $q->where('teacher_id', $user->id)
+                    ->orWhereIn('teacher_id', $adminIds);
+            });
         } else {
             $teacherIds = Evaluation::whereIn('id', EvaluationResult::where('user_id', $user->id)->pluck('evaluation_id'))
                 ->pluck('teacher_id');
-            $query->whereIn('teacher_id', $teacherIds);
+            $query->where(function ($q) use ($teacherIds, $adminIds) {
+                $q->whereIn('teacher_id', $teacherIds)
+                    ->orWhereIn('teacher_id', $adminIds);
+            });
         }
 
         $threads = $query->orderByDesc('created_at')->get();
@@ -42,8 +56,8 @@ class ForumController extends Controller
     }
 
     /**
-     * Detalle de un hilo con sus posts (solo accesible por docentes del hilo
-     * o estudiantes con relación con el docente autor).
+     * Detalle de un hilo con sus posts (accesible por el admin, el docente
+     * autor, estudiantes con relación con el docente y los avisos del admin).
      */
     public function show(Request $request, $threadId)
     {
@@ -66,7 +80,7 @@ class ForumController extends Controller
     public function store(Request $request)
     {
         $user = Auth::user();
-        if (!in_array($user->role?->name, ['teacher', 'coordinador', 'director', 'admin'])) {
+        if (!in_array($user->role?->name, ['teacher', 'coordinador', 'director'])) {
             return response()->json(['message' => 'Solo docentes pueden crear hilos'], 403);
         }
 
@@ -116,14 +130,61 @@ class ForumController extends Controller
     }
 
     /**
-     * Cerrar un hilo (solo el docente autor).
+     * Editar un comentario: su autor o el docente dueño del hilo.
+     */
+    public function updatePost(Request $request, $postId)
+    {
+        $user = Auth::user();
+        $post = ForumPost::with('thread')->findOrFail($postId);
+
+        $isAuthor = (string) $post->user_id === (string) $user->id;
+        $isThreadOwner = $this->isThreadOwner($user, $post->thread);
+
+        if (!$isAuthor && !$isThreadOwner) {
+            return response()->json(['message' => __('forum_post_forbidden')], 403);
+        }
+
+        $validated = $request->validate([
+            'body' => 'required|string|max:5000',
+        ]);
+
+        $post->update(['body' => $validated['body']]);
+
+        return response()->json([
+            'message' => __('forum_post_updated'),
+            'data' => $post->fresh()->load('user:id,full_name,role_id'),
+        ]);
+    }
+
+    /**
+     * Eliminar un comentario: su autor o el docente dueño del hilo.
+     */
+    public function deletePost($postId)
+    {
+        $user = Auth::user();
+        $post = ForumPost::with('thread')->findOrFail($postId);
+
+        $isAuthor = (string) $post->user_id === (string) $user->id;
+        $isThreadOwner = $this->isThreadOwner($user, $post->thread);
+
+        if (!$isAuthor && !$isThreadOwner) {
+            return response()->json(['message' => __('forum_post_forbidden')], 403);
+        }
+
+        $post->delete();
+
+        return response()->json(['message' => __('forum_post_deleted')]);
+    }
+
+    /**
+     * Cerrar un hilo (el docente autor).
      */
     public function close(Request $request, $threadId)
     {
         $user = Auth::user();
         $thread = ForumThread::findOrFail($threadId);
 
-        if ((string) $thread->teacher_id !== (string) $user->id) {
+        if (!$this->isThreadOwner($user, $thread)) {
             return response()->json(['message' => 'Solo el docente autor puede cerrar el hilo'], 403);
         }
 
@@ -132,9 +193,35 @@ class ForumController extends Controller
         return response()->json(['message' => 'Hilo cerrado', 'data' => $thread]);
     }
 
+    /** Indica si el usuario actual es el docente dueño del hilo. */
+    private function isThreadOwner($user, $thread): bool
+    {
+        if (!in_array($user->role?->name, ['teacher', 'coordinador', 'director'])) {
+            return false;
+        }
+
+        return (string) $thread->teacher_id === (string) $user->id;
+    }
+
     private function assertCanView($user, $thread)
     {
         $role = $user->role?->name;
+
+        // El administrador puede ver cualquier hilo.
+        if ($role === 'admin') {
+            return;
+        }
+
+        // Los hilos creados por administradores son avisos visibles para todos.
+        // Se consulta directamente (no la relación cargada) porque el docente
+        // se eager-loadea solo con id y full_name.
+        $isAdminThread = User::where('id', $thread->teacher_id)
+            ->whereHas('role', fn ($q) => $q->where('name', 'admin'))
+            ->exists();
+        if ($isAdminThread) {
+            return;
+        }
+
         if (in_array($role, ['teacher', 'coordinador', 'director'])) {
             if ((string) $thread->teacher_id !== (string) $user->id) {
                 abort(403, 'No tienes permiso para ver este hilo');

@@ -105,6 +105,7 @@ return [
     'evaluation_duplicated' => 'Evaluation duplicated successfully',
     'evaluation_duplicate_error' => 'Error duplicating evaluation',
     'evaluation_no_permission_view_stats' => 'You do not have permission to view statistics for this evaluation',
+    'evaluation_invalid_question' => 'The evaluation contains an invalid question or one that does not belong to this evaluation',
 
     // Lesson
     'lesson_not_available' => 'This lesson is not available',

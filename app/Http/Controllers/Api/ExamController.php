@@ -7,6 +7,7 @@ use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Models\ExamAttempt;
 use App\Models\Notification;
+use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -22,14 +23,15 @@ class ExamController extends Controller
     {
         $query = Exam::with(['teacher']);
 
-        if (Auth::user()->isTeacher() || Auth::user()->isAdmin()) {
-            if (!Auth::user()->isAdmin()) {
+        if (Auth::user()->isTeacher()) {
+            // Coordinador y director ven todos; el docente solo los suyos.
+            if (!Auth::user()->isCoordinator() && !Auth::user()->isDirector()) {
                 $query->where('teacher_id', Auth::id());
             }
         } elseif (Auth::user()->isStudent()) {
             $query->where('is_active', true);
-        } elseif (Auth::user()->isParent()) {
-            $query->where('is_active', true);
+        } else {
+            abort(403, 'No tienes permiso');
         }
 
         if ($request->has('is_active') && $request->is_active !== null) {
@@ -153,12 +155,12 @@ class ExamController extends Controller
         }
     }
 
-    /** Devuelve el examen y sus preguntas, ocultando las respuestas a estudiantes y padres. */
+    /** Devuelve el examen y sus preguntas, ocultando las respuestas a estudiantes. */
     public function show($id)
     {
         $exam = Exam::with(['teacher', 'questions'])->findOrFail($id);
 
-        if (Auth::user()->isStudent() || Auth::user()->isParent()) {
+        if (Auth::user()->isStudent()) {
             if (!$exam->is_active && Auth::user()->isStudent()) {
                 return response()->json([
                     'success' => false,
@@ -189,7 +191,7 @@ class ExamController extends Controller
     {
         $exam = Exam::findOrFail($id);
 
-        if ((string) $exam->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
+        if (!$this->canManage($exam)) {
             return response()->json([
                 'success' => false,
                 'message' => 'No tiene permiso para editar este examen'
@@ -272,7 +274,7 @@ class ExamController extends Controller
     {
         $exam = Exam::findOrFail($id);
 
-        if ((string) $exam->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
+        if (!$this->canManage($exam)) {
             return response()->json([
                 'success' => false,
                 'message' => 'No tiene permiso para eliminar este examen'
@@ -299,7 +301,7 @@ class ExamController extends Controller
     {
         $exam = Exam::findOrFail($id);
 
-        if ((string) $exam->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
+        if (!$this->canManage($exam)) {
             return response()->json([
                 'success' => false,
                 'message' => 'No tiene permiso para activar este examen'
@@ -331,7 +333,7 @@ class ExamController extends Controller
     {
         $exam = Exam::findOrFail($id);
 
-        if ((string) $exam->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
+        if (!$this->canManage($exam)) {
             return response()->json([
                 'success' => false,
                 'message' => 'No tiene permiso para desactivar este examen'
@@ -622,7 +624,7 @@ class ExamController extends Controller
     {
         $exam = Exam::findOrFail($id);
 
-        if ((string) $exam->teacher_id !== (string) Auth::id() && !Auth::user()->isAdmin()) {
+        if (!$this->canManage($exam)) {
             return response()->json([
                 'success' => false,
                 'message' => 'No tiene permiso para ver las estadísticas de este examen'
@@ -674,6 +676,47 @@ class ExamController extends Controller
             'success' => true,
             'data' => $stats
         ]);
+    }
+
+    /** Historial de intentos y calificaciones del estudiante autenticado. */
+    public function myAttempts(Request $request)
+    {
+        $attempts = ExamAttempt::where('student_id', Auth::id())
+            ->with('exam:id,title,unit,difficulty,total_questions,total_points')
+            ->orderByDesc('created_at')
+            ->paginate(min((int) ($request->per_page ?? 15), 50));
+
+        $summary = [
+            'total_attempts' => ExamAttempt::where('student_id', Auth::id())->count(),
+            'completed' => ExamAttempt::where('student_id', Auth::id())
+                ->where('status', ExamAttempt::STATUS_COMPLETED)->count(),
+            'in_progress' => ExamAttempt::where('student_id', Auth::id())
+                ->where('status', ExamAttempt::STATUS_IN_PROGRESS)->count(),
+            'average_score' => (float) ExamAttempt::where('student_id', Auth::id())
+                ->where('status', ExamAttempt::STATUS_COMPLETED)->avg('score'),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'summary' => $summary,
+            'data' => $attempts->items(),
+            'meta' => [
+                'current_page' => $attempts->currentPage(),
+                'total' => $attempts->total(),
+            ],
+        ]);
+    }
+
+    /** Comprueba si el usuario actual gestiona el examen: dueño, coordinador o director. */
+    private function canManage(Exam $exam): bool
+    {
+        $user = Auth::user();
+
+        if (in_array($user->role?->name, [Role::COORDINATOR, Role::DIRECTOR])) {
+            return true;
+        }
+
+        return $user->isTeacher() && (string) $exam->teacher_id === (string) $user->id;
     }
 
     private function normalizeAnswer(string $value): string

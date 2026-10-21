@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Support\EvaluationAnswerFormatter;
 
 /** Pregunta de una evaluación con las respuestas enviadas por estudiantes. */
 class Question extends Model
@@ -31,6 +32,13 @@ class Question extends Model
         'points' => 'integer',
         'order' => 'integer'
     ];
+
+    protected $appends = ['correct_answer_display'];
+
+    public function getCorrectAnswerDisplayAttribute(): string
+    {
+        return EvaluationAnswerFormatter::correctAnswer($this);
+    }
 
     // ========== CONSTANTES ==========
     const TYPE_MULTIPLE_CHOICE = 'multiple_choice';

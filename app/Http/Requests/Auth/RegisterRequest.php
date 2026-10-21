@@ -22,7 +22,7 @@ class RegisterRequest extends FormRequest
             'full_name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
-            'role' => 'sometimes|in:student,parent',
+            'role' => 'sometimes|in:student',
             'academic_level' => 'required_if:role,student|in:basic,intermediate,advanced',
             'institution' => 'nullable|string|max:255',
             'grade' => 'nullable|string|max:50',

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Support\EvaluationAnswerFormatter;
 
 /** Respuesta de un usuario a una pregunta dentro de un resultado de evaluación. */
 class StudentAnswer extends Model
@@ -25,8 +26,17 @@ class StudentAnswer extends Model
 
     protected $casts = [
         'is_correct' => 'boolean',
-        'points_earned' => 'integer'
+        'points_earned' => 'float'
     ];
+
+    protected $appends = ['answer_display'];
+
+    public function getAnswerDisplayAttribute(): string
+    {
+        return $this->relationLoaded('question') && $this->question
+            ? EvaluationAnswerFormatter::submittedAnswer($this->question, (string) $this->answer)
+            : (string) $this->answer;
+    }
 
     // ========== RELACIONES ==========
     /** Usuario que envió la respuesta. */

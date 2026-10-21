@@ -169,24 +169,6 @@ class User extends Authenticatable
         return $this->role?->name === Role::STUDENT;
     }
 
-    /** Indica si el rol actual es padre o tutor. */
-    public function isParent()
-    {
-        return $this->role?->name === Role::PARENT;
-    }
-
-    /** Estudiantes vinculados como hijos o tutelados por este usuario. */
-    public function children()
-    {
-        return $this->belongsToMany(User::class, 'parent_student', 'parent_id', 'student_id');
-    }
-
-    /** Usuarios vinculados como padres o tutores de este estudiante. */
-    public function parents()
-    {
-        return $this->belongsToMany(User::class, 'parent_student', 'student_id', 'parent_id');
-    }
-
     /** Comprueba si el rol coincide con el nombre indicado. */
     public function hasRole($roleName)
     {

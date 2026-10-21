@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\Cors::class,
             \App\Http\Middleware\SecurityHeaders::class,
             \App\Http\Middleware\GlobalRateLimit::class,
+            \App\Http\Middleware\SetRequestLocale::class,
         ]);
         $middleware->redirectGuestsTo(fn ($request) => $request->expectsJson() ? null : '/');
     })

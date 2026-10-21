@@ -21,6 +21,7 @@ class Lesson extends Model
         'content',
         'teacher_id',
         'course_id',
+        'grade',
         'unit',
         'topic',
         'difficulty',

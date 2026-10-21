@@ -97,6 +97,7 @@
     "evaluation_duplicated": "Evaluation duplicated successfully",
     "evaluation_duplicate_error": "Error duplicating evaluation",
     "evaluation_no_permission_view_stats": "You do not have permission to view statistics for this evaluation",
+    "evaluation_invalid_question": "The evaluation contains an invalid question or one that does not belong to this evaluation",
     "lesson_not_available": "This lesson is not available",
     "lesson_created": "Lesson created successfully",
     "lesson_no_permission_edit": "You do not have permission to edit this lesson",
@@ -183,5 +184,17 @@
     "intermediate_level": "Intermediate",
     "advanced_level": "Advanced",
     "adaptive_evaluation": "Adaptive Evaluation",
-    "points_to_next_level": "points to next level"
+    "points_to_next_level": "points to next level",
+    "announcement_created": "Announcement published",
+    "announcement_updated": "Announcement updated",
+    "announcement_deleted": "Announcement deleted",
+    "attendance_saved": "Attendance saved successfully",
+    "attendance_course_forbidden": "You cannot manage attendance for this course",
+    "gamification_student_forbidden": "You do not have access to this student's gamification",
+    "gamification_student_not_found": "Student not found",
+    "forum_post_updated": "Comment updated",
+    "forum_post_deleted": "Comment deleted",
+    "forum_post_forbidden": "You cannot moderate this comment",
+    "student_profile_updated": "Academic profile updated",
+    "student_profile_forbidden": "Only students can edit this profile"
 }

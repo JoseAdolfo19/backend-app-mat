@@ -502,7 +502,7 @@ class MathContentSeeder extends Seeder
                     'evaluation_id' => $evaluation->id,
                     'type' => 'multiple_choice',
                     'question_text' => $questionData['question_text'],
-                    'options' => json_encode($questionData['options']),
+                    'options' => $questionData['options'],
                     'correct_answer' => $questionData['correct_answer'],
                     'explanation' => $questionData['explanation'],
                     'points' => 4,

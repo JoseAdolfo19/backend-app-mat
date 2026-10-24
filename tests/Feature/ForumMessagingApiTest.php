@@ -96,6 +96,11 @@ class ForumMessagingApiTest extends TestCase
 
     // ================= CONVERSACIONES =================
 
+    public function test_unauthenticated_user_cannot_access_conversations(): void
+    {
+        $this->getJson("{$this->baseUrl}/conversations")->assertUnauthorized();
+    }
+
     public function test_teacher_can_start_conversation_with_linked_student(): void
     {
         Sanctum::actingAs($this->teacher, ['web']);

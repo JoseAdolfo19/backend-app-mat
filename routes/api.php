@@ -316,11 +316,11 @@ Route::prefix('v1')->group(function () {
         Route::get('/rankings/my-position', [RankingController::class, 'myPosition']);
 
         // ============================================================
-        // REPORTES: todo el prefijo queda restringido a docentes (la
-        // jerarquía del middleware incluye a coordinador y director).
+        // REPORTES: disponibles para docentes y administradores; la
+        // jerarquía del middleware también incluye a coordinadores y directores.
         // ============================================================
 
-        Route::prefix('reports')->middleware(['role:teacher'])->group(function () {
+        Route::prefix('reports')->middleware(['role:teacher,admin'])->group(function () {
             Route::get('/performance', [ReportController::class, 'performanceReport'])
                 ->middleware('cache.api');
             Route::get('/filtered-performance', [ReportController::class, 'filteredPerformanceReport'])
@@ -475,7 +475,7 @@ Route::prefix('v1')->group(function () {
     // MENSAJERÍA: operaciones de conversación con límite de 30 solicitudes por minuto.
     // ============================================================
 
-    Route::prefix('conversations')->middleware(['throttle:30,1'])->group(function () {
+    Route::prefix('conversations')->middleware(['auth:sanctum', 'auth.active', 'rate.limit', 'throttle:30,1'])->group(function () {
         Route::get('/', [MessageController::class, 'index']);
         Route::post('/', [MessageController::class, 'store']);
         Route::get('/{id}', [MessageController::class, 'show']);

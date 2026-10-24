@@ -384,6 +384,43 @@ class EvaluationApiTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_json_encoded_legacy_options_are_displayed_and_graded(): void
+    {
+        $evaluation = Evaluation::create([
+            'id' => \Illuminate\Support\Str::uuid(),
+            'title' => 'Legacy options',
+            'teacher_id' => $this->teacher->id,
+            'type' => Evaluation::TYPE_QUIZ,
+            'difficulty' => Evaluation::DIFFICULTY_BASIC,
+            'is_published' => true,
+            'max_attempts' => 1,
+            'lesson_id' => $this->gradedLessonId(),
+        ]);
+        $question = Question::create([
+            'id' => \Illuminate\Support\Str::uuid(),
+            'evaluation_id' => $evaluation->id,
+            'type' => Question::TYPE_MULTIPLE_CHOICE,
+            'question_text' => 'Elige la alternativa correcta',
+            'options' => json_encode(['Primera alternativa', 'Segunda alternativa']),
+            'correct_answer' => '2',
+            'points' => 1,
+        ]);
+
+        Sanctum::actingAs($this->student, ['web']);
+        $this->getJson("{$this->baseUrl}/evaluations/{$evaluation->id}/questions")
+            ->assertOk()
+            ->assertJsonPath('data.0.options', '["Primera alternativa","Segunda alternativa"]');
+
+        $this->postJson("{$this->baseUrl}/evaluations/{$evaluation->id}/submit", [
+            'answers' => [
+                ['question_id' => $question->id, 'answer' => 'Segunda alternativa'],
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.score', 20)
+            ->assertJsonPath('data.correct_answers', 1);
+    }
+
     public function test_numeric_answer_matching_the_raw_key_is_graded_correctly(): void
     {
         $evaluation = Evaluation::create([

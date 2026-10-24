@@ -77,7 +77,20 @@ class EvaluationAnswerFormatter
 
     private static function options(Question $question): array
     {
-        return collect($question->options ?? [])
+        $options = $question->options ?? [];
+        for ($attempt = 0; $attempt < 2 && is_string($options); $attempt++) {
+            $decoded = json_decode($options, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return [];
+            }
+            $options = $decoded;
+        }
+
+        if (!is_array($options)) {
+            return [];
+        }
+
+        return collect($options)
             ->values()
             ->map(function ($option, $index) {
                 if (is_string($option)) {
